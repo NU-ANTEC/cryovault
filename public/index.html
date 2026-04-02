@@ -888,7 +888,7 @@ let view='home', curTank=null, curRack=null, curBox=null, selVial=null;
 let searchTerm='', searchFilter='all', searchResults=null, searchDebounce=null;
 let highlightVial=null;
 let historyPage=1, historyFilter={entity_type:'',action:'',search:''};
-let scanTargetId=null;
+// scanTargetId declared in field scanner block below
 
 const rowLbl  = i => String.fromCharCode(65+i);
 const colLbl  = i => String(i+1).padStart(2,'0');
