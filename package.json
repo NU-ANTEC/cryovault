@@ -12,11 +12,11 @@
   },
 
   "dependencies": {
-    "@zxing/library": "^0.21.3",
     "better-sqlite3": "^9.4.3",
     "cors":           "^2.8.5",
     "dotenv":         "^16.4.5",
     "express":        "^4.18.2",
+    "html5-qrcode":   "^2.3.8",
     "node-cron":      "^3.0.3",
     "qrcode":         "^1.5.3",
     "uuid":           "^9.0.0"

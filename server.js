@@ -97,21 +97,23 @@ app.use(express.static(path.join(__dirname, 'public')));
 // --------------------------
 // Served from node_modules — works on air-gapped networks, no CDN needed.
 //
-// ZXing  — the only client-side scan engine (QR, Data Matrix, Code128, EAN…)
-// qrcode — QR code image generator for displaying stored QR values
-app.get('/zxing.min.js', (_req, res) => {
+// html5-qrcode — browser-native scanner (QR, Data Matrix, Code128, EAN…)
+// qrcode       — server-side QR image generator for displaying stored codes
+
+// html5-qrcode UMD build — exposes Html5Qrcode and Html5QrcodeSupportedFormats
+// as globals in the browser.
+app.get('/html5-qrcode.min.js', (_req, res) => {
   const candidates = [
-    path.join(__dirname, 'node_modules', '@zxing', 'library', 'umd', 'index.min.js'),
-    path.join(__dirname, 'node_modules', '@zxing', 'library', 'umd', 'index.js'),
-    path.join(__dirname, 'node_modules', '@zxing', 'library', 'cjs', 'index.js'),
+    path.join(__dirname, 'node_modules', 'html5-qrcode', 'minified', 'html5-qrcode.min.js'),
+    path.join(__dirname, 'node_modules', 'html5-qrcode', 'html5-qrcode.min.js'),
   ];
-  const fs   = require('fs');
+  const fs    = require('fs');
   const found = candidates.find(f => fs.existsSync(f));
   if(found){
     res.set('Content-Type', 'application/javascript');
     res.sendFile(found);
   } else {
-    res.status(404).send('// @zxing/library not found — run npm install');
+    res.status(404).send('// html5-qrcode not found — run npm install');
   }
 });
 
