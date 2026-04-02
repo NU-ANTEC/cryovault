@@ -26,7 +26,7 @@ bash run.sh
 ```
 
 On first run this will:
-1. Copy `.env.example` → `.env` with Docker-appropriate defaults
+1. Copy `.env.example` → `.env` and `docker-compose.yml.example` → `docker-compose.yml` with Docker-appropriate defaults
 2. Create a `./data/` directory on your host for the SQLite database
 3. Build the Docker image
 4. Start the container
