@@ -1,0 +1,69 @@
+# =============================================================================
+# .gitignore — Files That Should Never Be Committed to Version Control
+# =============================================================================
+#
+# Git tracks your source code history. Some files should NEVER be committed:
+#
+#   Secrets (.env)       — passwords and API keys would be readable by anyone
+#                          with repo access, and stay in history forever
+#   node_modules/        — hundreds of MB, fully reproducible with `npm install`
+#   Database files       — runtime data, not source code; binary format doesn't
+#                          diff or merge meaningfully
+#   Build artifacts      — generated files that can be recreated from source
+#   OS/editor junk       — .DS_Store, Thumbs.db, etc.
+#
+# Best practice: commit this file as one of the first things in a new project
+# so none of the excluded files ever accidentally get committed.
+# =============================================================================
+
+# ── Secrets — CRITICAL ────────────────────────────────────────────────────────
+# .env holds passwords, JWT secrets, API keys, etc.
+# NEVER commit this. If you do, rotate all credentials immediately.
+.env
+.env.local
+.env.*.local
+
+# ── Node.js ───────────────────────────────────────────────────────────────────
+node_modules/        # Install with `npm install` — never commit this
+npm-debug.log*       # npm error logs
+.npm/                # npm cache
+.node_repl_history   # Node.js REPL history
+
+# ── Database ──────────────────────────────────────────────────────────────────
+*.db                 # SQLite database files
+*.db-shm             # SQLite WAL shared memory
+*.db-wal             # SQLite WAL write-ahead log
+backups/             # Backup directory (use cloud storage for backups)
+data/                # Runtime database volume — DO NOT commit database files
+                     # This directory is created by Docker or manually.
+                     # Add a .gitkeep inside if you want git to track the
+                     # directory but not its contents.
+
+# ── SSL certificates ──────────────────────────────────────────────────────────
+certs/               # TLS certificate files — never commit private keys
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── Operating system files ────────────────────────────────────────────────────
+.DS_Store            # macOS folder metadata
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db            # Windows thumbnail cache
+
+# ── Editor and IDE files ──────────────────────────────────────────────────────
+.vscode/             # VS Code workspace settings (personal preference)
+.idea/               # JetBrains IDEs
+*.sublime-project
+*.sublime-workspace
+*.swp                # Vim swap files
+*.swo
+
+# ── Build outputs ─────────────────────────────────────────────────────────────
+dist/
+build/
+coverage/            # Test coverage reports
