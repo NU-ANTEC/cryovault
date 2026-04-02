@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>CryoVault Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet"/>
+<style>
+/* ── Variables — mirrors the theme system in index.html ─────────────────── */
+:root {
+  --bg:       #070d14;
+  --surface:  #0d1a26;
+  --surface2: #112030;
+  --border:   #1a3a55;
+  --accent:   #00c8ff;
+  --accent2:  #0077aa;
+  --warn:     #ff9500;
+  --danger:   #ff3b55;
+  --success:  #00e599;
+  --text:     #cde8ff;
+  --muted:    #5a8aaa;
+  --purple:   #a07fff;
+  --mono: 'Share Tech Mono', monospace;
+  --sans: 'Rajdhani', sans-serif;
+  --radius: 2px;
+}
+
+/* Apply theme from localStorage if set */
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:var(--sans);font-size:15px;
+  min-height:100vh;
+}
+body::before{
+  content:'';position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,200,255,.012) 2px,rgba(0,200,255,.012) 4px);
+  pointer-events:none;z-index:9999;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 28px;
+  border-bottom:1px solid var(--border);
+  background:var(--surface);
+  position:sticky;top:0;z-index:100;
+}
+.logo{font-family:var(--mono);font-size:18px;color:var(--accent);letter-spacing:2px;text-shadow:0 0 12px rgba(0,200,255,.4)}
+.logo-sub{color:var(--muted);font-size:11px;margin-left:8px}
+.header-right{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.header-right a{color:var(--accent2);text-decoration:none}.header-right a:hover{color:var(--accent)}
+
+.page{max-width:760px;margin:0 auto;padding:32px 28px}
+
+/* ── Section ─────────────────────────────────────────────────────────────── */
+.section{margin-bottom:36px}
+.section-title{
+  font-family:var(--sans);font-size:18px;font-weight:700;
+  letter-spacing:1px;text-transform:uppercase;
+  margin-bottom:6px;
+}
+.section-desc{
+  font-family:var(--mono);font-size:11px;color:var(--muted);
+  line-height:1.8;margin-bottom:18px;
+}
+.section-sep{
+  font-family:var(--mono);font-size:10px;color:var(--muted);
+  text-transform:uppercase;letter-spacing:2px;
+  padding-bottom:8px;border-bottom:1px solid var(--border);
+  margin-bottom:16px;
+}
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+.card{
+  background:var(--surface);border:1px solid var(--border);
+  padding:20px 22px;border-radius:var(--radius);margin-bottom:14px;
+}
+.card-title{
+  font-family:var(--sans);font-size:15px;font-weight:700;
+  margin-bottom:6px;color:var(--text);
+}
+.card-desc{font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.8;margin-bottom:14px}
+
+/* ── Toggle ──────────────────────────────────────────────────────────────── */
+.toggle-row{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:14px;
+}
+.toggle-label{font-family:var(--mono);font-size:12px;color:var(--text)}
+.toggle-switch{
+  width:44px;height:24px;background:var(--border);border-radius:12px;
+  cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;
+}
+.toggle-switch.on{background:var(--accent2)}
+.toggle-switch::after{
+  content:'';position:absolute;top:4px;left:4px;
+  width:16px;height:16px;border-radius:50%;background:#fff;
+  transition:transform .2s;
+}
+.toggle-switch.on::after{transform:translateX(20px)}
+
+/* ── Status badges ───────────────────────────────────────────────────────── */
+.badge{
+  font-family:var(--mono);font-size:10px;padding:2px 8px;
+  border:1px solid;border-radius:2px;display:inline-block;
+  vertical-align:middle;margin-left:8px;
+}
+.badge-ok   {border-color:var(--success);color:var(--success)}
+.badge-warn {border-color:var(--warn);color:var(--warn)}
+.badge-err  {border-color:var(--danger);color:var(--danger)}
+.badge-off  {border-color:var(--muted);color:var(--muted)}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.btn{
+  font-family:var(--mono);font-size:11px;letter-spacing:1px;
+  padding:7px 16px;border:1px solid var(--accent2);
+  background:transparent;color:var(--accent);
+  cursor:pointer;transition:all .15s;text-transform:uppercase;
+  border-radius:var(--radius);white-space:nowrap;
+}
+.btn:hover{background:var(--accent2);color:#fff}
+.btn-success{border-color:var(--success);color:var(--success)}.btn-success:hover{background:var(--success);color:#000}
+.btn-danger {border-color:var(--danger) ;color:var(--danger) }.btn-danger:hover {background:var(--danger);color:#fff}
+.btn-sm{padding:4px 10px;font-size:10px}
+
+/* ── Backup file list ────────────────────────────────────────────────────── */
+.file-list{margin-top:14px}
+.file-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 0;border-bottom:1px solid var(--border);gap:10px;
+}
+.file-row:last-child{border-bottom:none}
+.file-name{font-family:var(--mono);font-size:11px;color:var(--text)}
+.file-meta{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.file-size{font-family:var(--mono);font-size:10px;color:var(--accent);white-space:nowrap}
+
+/* ── Info box ────────────────────────────────────────────────────────────── */
+.info-box{
+  background:var(--surface2);border-left:3px solid var(--accent2);
+  padding:12px 16px;border-radius:var(--radius);
+  font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.9;
+  margin-top:14px;
+}
+.info-box code{color:var(--accent);background:rgba(0,200,255,.08);padding:1px 5px;border-radius:2px}
+
+/* ── Stat row ────────────────────────────────────────────────────────────── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+.stat-cell{
+  background:var(--surface2);border:1px solid var(--border);
+  padding:10px 12px;border-radius:var(--radius);
+}
+.stat-label{font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.stat-value{font-family:var(--mono);font-size:14px;color:var(--accent);font-weight:bold}
+
+/* ── Loading / error states ─────────────────────────────────────────────── */
+.loading{font-family:var(--mono);font-size:11px;color:var(--muted);padding:16px 0}
+.error-msg{font-family:var(--mono);font-size:11px;color:var(--danger);padding:10px 0}
+.empty-msg{font-family:var(--mono);font-size:11px;color:var(--muted);font-style:italic}
+
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+.toast-container{position:fixed;top:16px;right:16px;z-index:500;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{font-family:var(--mono);font-size:11px;padding:10px 16px;border:1px solid;border-radius:var(--radius);animation:slideIn .2s ease}
+.toast.ok  {border-color:var(--success);color:var(--success);background:rgba(0,229,153,.1)}
+.toast.err {border-color:var(--danger) ;color:var(--danger) ;background:rgba(255,59,85,.1)}
+.toast.info{border-color:var(--accent2);color:var(--accent)  ;background:rgba(0,200,255,.08)}
+@keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* ── Divider ─────────────────────────────────────────────────────────────── */
+.divider{border:none;border-top:1px solid var(--border);margin:28px 0}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media(max-width:600px){
+  header{padding:10px 16px}
+  .page{padding:20px 16px}
+  .stat-grid{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <span class="logo">CRYOVAULT</span>
+    <span class="logo-sub">// ADMIN</span>
+  </div>
+  <div class="header-right">
+    <a href="/">← Back to inventory</a>
+  </div>
+</header>
+
+<div class="toast-container" id="toast-container"></div>
+
+<div class="page">
+
+  <div style="margin-bottom:28px">
+    <div style="font-family:var(--sans);font-size:22px;font-weight:700;letter-spacing:1px;margin-bottom:6px">
+      Administration
+    </div>
+    <div style="font-family:var(--mono);font-size:11px;color:var(--muted)">
+      Operational settings — archive policy and database backups.
+      Changes take effect immediately unless otherwise noted.
+    </div>
+  </div>
+
+  <!-- ── ARCHIVE POLICY ─────────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-sep">Archive Policy</div>
+
+    <div class="card">
+      <div class="card-title">Archive on Delete</div>
+      <div class="card-desc">
+        When enabled, deleting a rack, box, or vial moves it to the archive
+        instead of permanently removing it. Archived items are hidden from the
+        main inventory but can be searched and restored from the
+        <strong style="color:var(--accent)">🗄 ARCHIVE</strong> view.
+        When disabled, deletions are permanent and irreversible.<br><br>
+        This setting is stored per-browser. All operators who should archive
+        instead of delete must enable it on their own device.
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label" id="archive-toggle-label">Archive on Delete: checking…</span>
+        <div class="toggle-switch" id="archive-toggle" onclick="toggleArchive()"></div>
+      </div>
+    </div>
+  </div>
+
+
+  <hr class="divider"/>
+
+  <!-- ── DATA IMPORT ───────────────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-sep">Data Import</div>
+
+    <div class="card">
+      <div class="card-title">Import CSV</div>
+      <div class="card-desc">
+        Upload a CSV file exported from CryoVault or formatted with the same columns.
+        Required columns: <code style="color:var(--accent)">rack_name, box_name, position, name</code>.<br>
+        The file is first analysed for conflicts. You review every collision
+        before anything is written to the database.
+      </div>
+
+      <!-- Step 1: File picker -->
+      <div id="import-step-upload">
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">
+          <div style="flex:1;min-width:200px">
+            <label style="font-family:var(--mono);font-size:10px;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:1px">CSV File</label>
+            <input type="file" id="import-file" accept=".csv"
+              style="font-family:var(--mono);font-size:11px;color:var(--text);background:var(--surface2);border:1px solid var(--border);padding:8px;width:100%;border-radius:var(--radius)"/>
+          </div>
+          <button class="btn btn-success" onclick="previewImport()">→ ANALYSE</button>
+        </div>
+        <div id="import-upload-hint" style="font-family:var(--mono);font-size:10px;color:var(--muted)"></div>
+      </div>
+
+      <!-- Step 2: Conflict review (hidden until analysis completes) -->
+      <div id="import-step-review" style="display:none;margin-top:16px"></div>
+    </div>
+  </div>
+
+  <hr class="divider"/>
+
+  <!-- ── DATABASE BACKUP ────────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-sep">Database Backup</div>
+
+    <div id="backup-status-area">
+      <div class="loading">Loading backup status…</div>
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+<script>
+// =============================================================================
+// ADMIN PAGE SCRIPT
+// =============================================================================
+
+const API = '';
+const SETTINGS_KEY = 'cryovault_settings';
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, type='ok'){
+  const c = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ── API helper ────────────────────────────────────────────────────────────────
+async function api(method, path, body=null){
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${API}/api${path}`, opts);
+  if(!res.ok){
+    const e = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(e.error || res.statusText);
+  }
+  return res.json();
+}
+
+// ── Escape HTML ────────────────────────────────────────────────────────────────
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// =============================================================================
+// ARCHIVE TOGGLE
+// Reads and writes the archiveOnDelete key in the same localStorage object
+// that the main app uses, so the setting is consistent across both pages.
+// =============================================================================
+function getSettings(){
+  try{ return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); }
+  catch{ return {}; }
+}
+function saveSettings(s){
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+}
+
+function initArchiveToggle(){
+  const s      = getSettings();
+  const enabled = s.archiveOnDelete === true;
+  const toggle  = document.getElementById('archive-toggle');
+  const label   = document.getElementById('archive-toggle-label');
+  toggle.classList.toggle('on', enabled);
+  label.textContent = `Archive on Delete: ${enabled ? 'ENABLED' : 'DISABLED'}`;
+  label.style.color = enabled ? 'var(--success)' : 'var(--muted)';
+}
+
+function toggleArchive(){
+  const s = getSettings();
+  s.archiveOnDelete = !s.archiveOnDelete;
+  saveSettings(s);
+  initArchiveToggle();
+  toast(`Archive on Delete ${s.archiveOnDelete ? 'enabled' : 'disabled'}`);
+}
+
+// =============================================================================
+// DATABASE BACKUP SECTION
+// =============================================================================
+
+function fmtTs(d){
+  if(!d) return '—';
+  return new Date(d).toLocaleString(undefined, {
+    year:'numeric', month:'short', day:'numeric',
+    hour:'2-digit', minute:'2-digit'
+  });
+}
+
+function fmtCron(expr){
+  if(!expr) return '—';
+  // Human-readable descriptions for the most common lab schedules
+  const known = {
+    '0 2 * * *':   'Daily at 02:00 UTC',
+    '0 */6 * * *': 'Every 6 hours',
+    '0 */12 * * *':'Every 12 hours',
+    '0 2 * * 0':   'Weekly, Sunday at 02:00 UTC',
+    '0 2 1 * *':   'Monthly, 1st at 02:00 UTC',
+    '0 * * * *':   'Every hour',
+  };
+  return known[expr] || expr;
+}
+
+async function loadBackupStatus(){
+  const area = document.getElementById('backup-status-area');
+  try{
+    const st = await api('GET', '/backup/status');
+    renderBackupStatus(st);
+  }catch(e){
+    area.innerHTML = `<div class="error-msg">Could not load backup status: ${esc(e.message)}</div>`;
+  }
+}
+
+function renderBackupStatus(st){
+  const area = document.getElementById('backup-status-area');
+
+  // ── Status badge ────────────────────────────────────────────────────────
+  let badge;
+  if(!st.enabled){
+    badge = `<span class="badge badge-off">DISABLED</span>`;
+  } else if(st.lastResult === 'success'){
+    badge = `<span class="badge badge-ok">ACTIVE</span>`;
+  } else if(st.lastResult === 'error'){
+    badge = `<span class="badge badge-err">ERROR</span>`;
+  } else {
+    badge = `<span class="badge badge-warn">WAITING</span>`;
+  }
+
+  // ── Stats grid ───────────────────────────────────────────────────────────
+  const statsHtml = `
+    <div class="stat-grid">
+      <div class="stat-cell">
+        <div class="stat-label">Status</div>
+        <div class="stat-value" style="font-size:12px">${badge}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">Schedule</div>
+        <div class="stat-value" style="font-size:11px;color:var(--text)">${esc(fmtCron(st.schedule))}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">Retention</div>
+        <div class="stat-value">${st.keepDays} days</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">Total files</div>
+        <div class="stat-value">${(st.files||[]).length}</div>
+      </div>
+    </div>`;
+
+  // ── Last run ─────────────────────────────────────────────────────────────
+  let lastRunHtml = '';
+  if(st.lastRun){
+    const resultColor = st.lastResult === 'success' ? 'var(--success)' : 'var(--danger)';
+    lastRunHtml = `
+      <div style="font-family:var(--mono);font-size:11px;margin-bottom:14px">
+        Last run: <span style="color:${resultColor}">${fmtTs(st.lastRun)}</span>
+        ${st.lastResult === 'success' && st.lastFile
+          ? ` — <span style="color:var(--text)">${esc(st.lastFile)}</span> (${esc(st.lastSize||'')})`
+          : ''}
+        ${st.lastError
+          ? `<br><span style="color:var(--danger)">Error: ${esc(st.lastError)}</span>`
+          : ''}
+      </div>`;
+  }
+
+  // ── File list ────────────────────────────────────────────────────────────
+  let filesHtml = '';
+  if(st.files && st.files.length > 0){
+    const rows = st.files.map(f => `
+      <div class="file-row">
+        <div>
+          <div class="file-name">${esc(f.name)}</div>
+          <div class="file-meta">${fmtTs(f.created)}</div>
+        </div>
+        <div class="file-size">${esc(f.size)}</div>
+      </div>`).join('');
+    filesHtml = `
+      <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">
+        Backup files (${st.files.length}) — newest first
+      </div>
+      <div class="file-list">${rows}</div>`;
+  } else if(st.enabled){
+    filesHtml = `<div class="empty-msg">No backup files yet — first backup will run at the next scheduled time, or click Backup Now.</div>`;
+  }
+
+  // ── Enable/disable note ───────────────────────────────────────────────────
+  const enableNote = !st.enabled ? `
+    <div style="font-family:var(--mono);font-size:11px;color:var(--warn);margin-bottom:14px;padding:10px 14px;border:1px solid var(--warn);border-radius:var(--radius)">
+      ⚠ Backups are disabled.<br>
+      To enable: set <code style="color:var(--accent)">BACKUP_ENABLED=true</code> in your <code style="color:var(--accent)">.env</code> file and restart the container.
+    </div>` : '';
+
+  area.innerHTML = `
+    <div class="card">
+      <div class="card-title">Automatic Backups</div>
+      <div class="card-desc">
+        Backs up the SQLite database on a schedule using SQLite's hot-backup API —
+        safe to run while the server is active. Backup files are written to
+        <code style="color:var(--accent)">/backups</code> inside the container,
+        which is bind-mounted to <code style="color:var(--accent)">./backups/</code>
+        on the host. They survive container deletion and Docker volume removal.
+      </div>
+      ${enableNote}
+      ${statsHtml}
+      ${lastRunHtml}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:${filesHtml?'14px':'0'}">
+        <button class="btn btn-success" id="btn-backup-now" onclick="triggerBackupNow()">▶ BACKUP NOW</button>
+        <button class="btn" onclick="loadBackupStatus()">↺ REFRESH</button>
+      </div>
+      ${filesHtml}
+    </div>
+
+    <div class="card">
+      <div class="card-title">Restore from Backup</div>
+      <div class="card-desc">
+        To restore the database from a backup file:
+      </div>
+      <div class="info-box">
+        <strong style="color:var(--text)">1. Stop the app container</strong><br>
+        <code>docker compose stop app</code><br><br>
+        <strong style="color:var(--text)">2. Restore the backup file</strong><br>
+        <code>gunzip -c backups/cryovault-DATE.db.gz &gt; data/cryovault.db</code><br><br>
+        <strong style="color:var(--text)">3. Restart the app</strong><br>
+        <code>docker compose start app</code>
+      </div>
+    </div>`;
+}
+
+async function triggerBackupNow(){
+  const btn = document.getElementById('btn-backup-now');
+  if(btn){ btn.textContent = '⏳ Running…'; btn.disabled = true; }
+  try{
+    await api('POST', '/backup/run');
+    toast('Backup complete');
+    await loadBackupStatus();
+  }catch(e){
+    toast('Backup failed: ' + e.message, 'err');
+    if(btn){ btn.textContent = '▶ BACKUP NOW'; btn.disabled = false; }
+  }
+}
+
+// =============================================================================
+// APPLY THEME FROM MAIN APP SETTINGS
+// Reads the same localStorage key so the admin page matches the operator's
+// chosen theme without them having to configure it twice.
+// =============================================================================
+function applyTheme(){
+  const s = getSettings();
+  const root = document.documentElement;
+  const themeVars = {
+    midnight:    { '--bg':'#08070f','--surface':'#111020','--surface2':'#181530','--border':'#2a2460','--accent':'#9b7dff','--accent2':'#5a3fbf','--warn':'#f0a030','--danger':'#ff4466','--success':'#33ddaa','--text':'#ddd8ff','--muted':'#6860a0' },
+    biohazard:   { '--bg':'#070f07','--surface':'#0a1a0a','--surface2':'#0f230f','--border':'#1a3f1a','--accent':'#39ff14','--accent2':'#1a8a00','--warn':'#ffcc00','--danger':'#ff3300','--success':'#00ffcc','--text':'#c8ffcc','--muted':'#4a8a4a' },
+    amber:       { '--bg':'#0e0900','--surface':'#1a1200','--surface2':'#241900','--border':'#3d2800','--accent':'#ffb000','--accent2':'#995500','--warn':'#ff6600','--danger':'#ff2200','--success':'#88ff44','--text':'#ffe8b0','--muted':'#8a6a30' },
+    light:       { '--bg':'#f4f6f9','--surface':'#ffffff','--surface2':'#eef1f6','--border':'#ccd4e0','--accent':'#0077cc','--accent2':'#0055aa','--warn':'#e07000','--danger':'#cc2244','--success':'#008844','--text':'#1a2a3a','--muted':'#667888' },
+    highcontrast:{ '--bg':'#000000','--surface':'#0a0a0a','--surface2':'#141414','--border':'#ffffff44','--accent':'#ffffff','--accent2':'#cccccc','--warn':'#ffff00','--danger':'#ff0000','--success':'#00ff00','--text':'#ffffff','--muted':'#aaaaaa' },
+    cryohc:      { '--bg':'#000d18','--surface':'#001a2e','--surface2':'#002440','--border':'#006699','--accent':'#00eeff','--accent2':'#00aacc','--warn':'#ffcc00','--danger':'#ff4466','--success':'#00ff99','--text':'#ffffff','--muted':'#88ccdd' },
+    lightwarm:   { '--bg':'#faf8f4','--surface':'#ffffff','--surface2':'#f2ede4','--border':'#d8cfc0','--accent':'#8b5e3c','--accent2':'#6b4226','--warn':'#d97706','--danger':'#c0392b','--success':'#2e7d32','--text':'#1a1208','--muted':'#7a6652' },
+    lightcool:   { '--bg':'#f0f4f8','--surface':'#ffffff','--surface2':'#e4edf5','--border':'#b8cfe0','--accent':'#0369a1','--accent2':'#075985','--warn':'#b45309','--danger':'#be123c','--success':'#065f46','--text':'#0f172a','--muted':'#4a6070' },
+  };
+
+  const theme = s.theme && s.theme !== 'default' ? themeVars[s.theme] : null;
+  if(theme){
+    for(const [k,v] of Object.entries(theme)){
+      root.style.setProperty(k, v);
+    }
+  }
+  if(s.fontMono) root.style.setProperty('--mono', `'${s.fontMono}', monospace`);
+  if(s.fontSans) root.style.setProperty('--sans', `'${s.fontSans}', sans-serif`);
+  if(s.fontSize) root.style.setProperty('font-size', `${s.fontSize}px`);
+  if(s.radius !== undefined) root.style.setProperty('--radius', `${s.radius}px`);
+}
+
+// =============================================================================
+// CSV IMPORT — two-phase: analyse then execute with per-row decisions
+// =============================================================================
+
+let _importCsv       = null;   // raw CSV text, kept for phase 2
+let _importRows      = null;   // preview rows from server
+let _importDecisions = {};     // { rowNum: 'skip' | 'overwrite' }
+
+function statusLabel(status) {
+  const map = {
+    new:       { text:'NEW',       color:'var(--success)' },
+    new_rack:  { text:'NEW RACK',  color:'var(--success)' },
+    new_box:   { text:'NEW BOX',   color:'var(--success)' },
+    conflict:  { text:'CONFLICT',  color:'var(--warn)'    },
+    duplicate: { text:'DUPLICATE', color:'var(--accent2)' },
+    error:     { text:'ERROR',     color:'var(--danger)'  },
+  };
+  const s = map[status] || { text: status.toUpperCase(), color:'var(--muted)' };
+  return `<span class="badge" style="border-color:${s.color};color:${s.color}">${s.text}</span>`;
+}
+
+async function previewImport() {
+  const fileEl = document.getElementById('import-file');
+  const hint   = document.getElementById('import-upload-hint');
+  const review = document.getElementById('import-step-review');
+
+  if (!fileEl.files[0]) {
+    hint.style.color = 'var(--danger)';
+    hint.textContent = 'Please select a CSV file first.';
+    return;
+  }
+
+  hint.style.color  = 'var(--muted)';
+  hint.textContent  = 'Analysing…';
+  review.style.display = 'none';
+  _importDecisions  = {};
+
+  try {
+    _importCsv = await fileEl.files[0].text();
+    const result = await api('POST', '/import/csv/preview', { csv: _importCsv });
+    _importRows = result.rows;
+
+    const s = result.summary;
+    hint.textContent = '';
+    renderImportReview(result);
+  } catch(e) {
+    hint.style.color = 'var(--danger)';
+    hint.textContent = 'Analysis failed: ' + e.message;
+  }
+}
+
+function renderImportReview(result) {
+  const review = document.getElementById('import-step-review');
+  const s      = result.summary;
+  const rows   = result.rows;
+
+  // Initialise decisions: conflicts default to 'skip', duplicates to 'skip'
+  _importDecisions = {};
+  rows.forEach(r => {
+    if (r.status === 'conflict' || r.status === 'duplicate') {
+      _importDecisions[r.rowNum] = 'skip';
+    }
+  });
+
+  const needsDecision = rows.filter(r => r.status === 'conflict' || r.status === 'duplicate');
+  const willCreate    = rows.filter(r => ['new','new_rack','new_box'].includes(r.status));
+  const errors        = rows.filter(r => r.status === 'error');
+
+  // ── Summary strip ─────────────────────────────────────────────────────────
+  let html = `
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">
+      Analysis result — ${s.total} rows · Tank: ${esc(s.tank_name)}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      <span class="badge badge-ok">${s.new + s.new_rack + s.new_box} NEW</span>
+      ${s.conflict  ? `<span class="badge badge-warn">${s.conflict} CONFLICT</span>` : ''}
+      ${s.duplicate ? `<span class="badge" style="border-color:var(--accent2);color:var(--accent2)">${s.duplicate} DUPLICATE</span>` : ''}
+      ${s.error     ? `<span class="badge badge-err">${s.error} ERROR</span>` : ''}
+    </div>`;
+
+  // ── Conflicts section ─────────────────────────────────────────────────────
+  if (needsDecision.length) {
+    html += `
+      <div style="font-family:var(--mono);font-size:10px;color:var(--warn);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">
+        ⚠ ${needsDecision.length} row(s) require a decision
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button class="btn btn-sm" onclick="setAllDecisions('skip')">Skip all conflicts</button>
+        <button class="btn btn-sm btn-danger" onclick="setAllDecisions('overwrite')">Overwrite all conflicts</button>
+      </div>`;
+
+    for (const row of needsDecision) {
+      const isDupe = row.status === 'duplicate';
+      html += `
+        <div id="conflict-row-${row.rowNum}" class="card" style="margin-bottom:10px;padding:14px 16px;border-color:${isDupe ? 'var(--accent2)' : 'var(--warn)'}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <div style="flex:1;min-width:0">
+              <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:6px">
+                Row ${row.rowNum} · ${statusLabel(row.status)}
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-family:var(--mono);font-size:11px">
+                <div>
+                  <div style="color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Incoming (CSV)</div>
+                  <div style="color:var(--text);font-weight:bold">${esc(row.incoming.name)}</div>
+                  <div style="color:var(--muted)">${esc(row.incoming.rack_name)} › ${esc(row.incoming.box_name)} › ${esc(row.incoming.position)}</div>
+                  ${row.incoming.sample_type ? `<div style="color:var(--muted)">${esc(row.incoming.sample_type)}</div>` : ''}
+                  ${row.incoming.researcher  ? `<div style="color:var(--muted)">${esc(row.incoming.researcher)}</div>`  : ''}
+                </div>
+                <div>
+                  <div style="color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Existing (database)</div>
+                  <div style="color:var(--accent);font-weight:bold">${esc(row.conflict.name)}</div>
+                  <div style="color:var(--muted)">${esc(row.incoming.rack_name)} › ${esc(row.incoming.box_name)} › ${esc(row.incoming.position)}</div>
+                  ${row.conflict.sample_type ? `<div style="color:var(--muted)">${esc(row.conflict.sample_type)}</div>` : ''}
+                  ${row.conflict.researcher  ? `<div style="color:var(--muted)">${esc(row.conflict.researcher)}</div>`  : ''}
+                </div>
+              </div>
+              ${isDupe ? `<div style="font-family:var(--mono);font-size:10px;color:var(--accent2);margin-top:6px">Same name — likely the same vial already stored</div>` : ''}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0" id="decision-btns-${row.rowNum}">
+              ${decisionButtons(row.rowNum, _importDecisions[row.rowNum])}
+            </div>
+          </div>
+        </div>`;
+    }
+  }
+
+  // ── Clean rows summary ────────────────────────────────────────────────────
+  if (willCreate.length) {
+    html += `
+      <div style="font-family:var(--mono);font-size:10px;color:var(--success);text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px">
+        ✓ ${willCreate.length} rows will be inserted cleanly
+      </div>`;
+    const preview = willCreate.slice(0, 5);
+    for (const row of preview) {
+      html += `<div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:3px 0;border-bottom:1px solid var(--border)">
+        ${esc(row.incoming.rack_name)} › ${esc(row.incoming.box_name)} › ${esc(row.incoming.position)} — <span style="color:var(--text)">${esc(row.incoming.name)}</span>
+        ${statusLabel(row.status)}
+      </div>`;
+    }
+    if (willCreate.length > 5) {
+      html += `<div style="font-family:var(--mono);font-size:10px;color:var(--muted);padding:4px 0">… and ${willCreate.length - 5} more</div>`;
+    }
+  }
+
+  // ── Errors summary ────────────────────────────────────────────────────────
+  if (errors.length) {
+    html += `
+      <div style="font-family:var(--mono);font-size:10px;color:var(--danger);text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px">
+        ✗ ${errors.length} rows have errors and will be skipped
+      </div>`;
+    for (const row of errors) {
+      html += `<div style="font-family:var(--mono);font-size:11px;color:var(--danger);padding:3px 0">Row ${row.rowNum}: ${esc(row.reason)}</div>`;
+    }
+  }
+
+  // ── Execute button ────────────────────────────────────────────────────────
+  const canExecute = willCreate.length > 0 || needsDecision.some(r => _importDecisions[r.rowNum] === 'overwrite');
+  html += `
+    <div style="margin-top:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-success" id="btn-execute-import" onclick="executeImport()">
+        ↑ EXECUTE IMPORT
+      </button>
+      <button class="btn" onclick="resetImport()">✕ CANCEL</button>
+      <span id="import-exec-status" style="font-family:var(--mono);font-size:11px;color:var(--muted)"></span>
+    </div>`;
+
+  review.innerHTML = html;
+  review.style.display = 'block';
+}
+
+function decisionButtons(rowNum, current) {
+  const skipClass = current === 'skip'      ? 'btn btn-sm btn-success' : 'btn btn-sm';
+  const overClass = current === 'overwrite' ? 'btn btn-sm btn-danger'  : 'btn btn-sm';
+  return `
+    <button class="${skipClass}" onclick="setDecision(${rowNum}, 'skip')">Skip</button>
+    <button class="${overClass}" onclick="setDecision(${rowNum}, 'overwrite')">Overwrite</button>`;
+}
+
+function setDecision(rowNum, decision) {
+  _importDecisions[rowNum] = decision;
+  const container = document.getElementById(`decision-btns-${rowNum}`);
+  if (container) container.innerHTML = decisionButtons(rowNum, decision);
+  // Highlight the row based on decision
+  const row = document.getElementById(`conflict-row-${rowNum}`);
+  if (row) {
+    row.style.borderColor = decision === 'overwrite' ? 'var(--danger)' : 'var(--border)';
+    row.style.opacity     = decision === 'skip' ? '0.6' : '1';
+  }
+}
+
+function setAllDecisions(decision) {
+  if (!_importRows) return;
+  _importRows
+    .filter(r => r.status === 'conflict' || r.status === 'duplicate')
+    .forEach(r => setDecision(r.rowNum, decision));
+}
+
+async function executeImport() {
+  const btn    = document.getElementById('btn-execute-import');
+  const status = document.getElementById('import-exec-status');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Importing…'; }
+
+  try {
+    const result = await api('POST', '/import/csv/execute', {
+      csv:       _importCsv,
+      decisions: _importDecisions,
+      changedBy: 'admin-import'
+    });
+    const s = result.stats;
+    if (status) {
+      status.style.color = 'var(--success)';
+      status.textContent = `Done — ${s.created} created, ${s.overwritten} overwritten, ${s.skipped} skipped${s.errors.length ? `, ${s.errors.length} errors` : ''}`;
+    }
+    toast(`Import complete: ${s.created} created, ${s.overwritten} overwritten, ${s.skipped} skipped`);
+    if (btn) { btn.textContent = '✓ DONE'; }
+  } catch(e) {
+    if (status) { status.style.color = 'var(--danger)'; status.textContent = 'Failed: ' + e.message; }
+    if (btn) { btn.disabled = false; btn.textContent = '↑ EXECUTE IMPORT'; }
+    toast('Import failed: ' + e.message, 'err');
+  }
+}
+
+function resetImport() {
+  _importCsv = null; _importRows = null; _importDecisions = {};
+  document.getElementById('import-file').value = '';
+  document.getElementById('import-upload-hint').textContent = '';
+  document.getElementById('import-step-review').style.display = 'none';
+  document.getElementById('import-step-review').innerHTML = '';
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+applyTheme();
+initArchiveToggle();
+loadBackupStatus();
+</script>
+</body>
+</html>

@@ -1,0 +1,2928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>CryoVault</title>
+<script src="/zxing.min.js"
+  onerror="console.warn('ZXing failed to load from /zxing.min.js')"></script>
+<script src="/qrcode.min.js"
+  onerror="console.error('qrcode failed to load from /qrcode.min.js')"></script>
+
+<!-- Google Fonts: all font options pre-loaded so switching is instant -->
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Fira+Code:wght@400;500&family=Source+Code+Pro:wght@400;500&display=swap" rel="stylesheet"/>
+
+<style>
+/* ==========================================================================
+   CSS CUSTOM PROPERTIES — the entire visual system lives here.
+   Every colour, font, and spacing value is a variable. The settings system
+   works by swapping these variables on :root at runtime; no component-level
+   styles need to change.
+   ========================================================================== */
+:root {
+  /* ── Active theme colours (overwritten by JS on load) ─────────────────── */
+  --bg:       #070d14;
+  --surface:  #0d1a26;
+  --surface2: #112030;
+  --border:   #1a3a55;
+  --accent:   #00c8ff;
+  --accent2:  #0077aa;
+  --warn:     #ff9500;
+  --danger:   #ff3b55;
+  --success:  #00e599;
+  --text:     #cde8ff;
+  --muted:    #5a8aaa;
+  --purple:   #a07fff;
+
+  /* ── Typography (overwritten by JS on load) ──────────────────────────── */
+  --font-mono:  'Share Tech Mono', monospace;
+  --font-sans:  'Rajdhani', sans-serif;
+  --font-size-base: 15px;    /* body base size */
+  --font-size-sm:   12px;    /* mono labels, meta */
+  --font-size-xs:   10px;    /* micro labels */
+  --line-height: 1.5;
+
+  /* ── Spacing / density ───────────────────────────────────────────────── */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  14px;
+  --space-lg:  22px;
+  --space-xl:  36px;
+
+  /* ── Corner radius ────────────────────────────────────────────────────── */
+  --radius:    2px;   /* 0 = sharp, 4 = slightly rounded, 8 = rounded */
+
+  /* ── Card / slot height ───────────────────────────────────────────────── */
+  --slot-min-height: 68px;
+
+  /* ── Scanline overlay intensity ──────────────────────────────────────── */
+  --scanline-opacity: 0.012;
+
+  /* ── Accent glow (used on logo, focused inputs, selected vials) ──────── */
+  --glow-color: rgba(0,200,255,0.45);
+}
+
+/* ==========================================================================
+   THEME DEFINITIONS
+   Each theme is a data-theme attribute on <html>. JS sets this attribute and
+   the cascade takes care of the rest. Variables that are unchanged between
+   themes don't need to be repeated.
+   ========================================================================== */
+
+/* Default / CryoBlue — already set in :root above */
+
+[data-theme="midnight"] {
+  --bg:       #08070f;
+  --surface:  #111020;
+  --surface2: #181530;
+  --border:   #2a2460;
+  --accent:   #9b7dff;
+  --accent2:  #5a3fbf;
+  --warn:     #f0a030;
+  --danger:   #ff4466;
+  --success:  #33ddaa;
+  --text:     #ddd8ff;
+  --muted:    #6860a0;
+  --purple:   #c09fff;
+  --glow-color: rgba(155,125,255,0.4);
+}
+
+[data-theme="biohazard"] {
+  --bg:       #070f07;
+  --surface:  #0a1a0a;
+  --surface2: #0f230f;
+  --border:   #1a3f1a;
+  --accent:   #39ff14;
+  --accent2:  #1a8a00;
+  --warn:     #ffcc00;
+  --danger:   #ff3300;
+  --success:  #00ffcc;
+  --text:     #c8ffcc;
+  --muted:    #4a8a4a;
+  --purple:   #aaff77;
+  --glow-color: rgba(57,255,20,0.4);
+}
+
+[data-theme="amber"] {
+  --bg:       #0e0900;
+  --surface:  #1a1200;
+  --surface2: #241900;
+  --border:   #3d2800;
+  --accent:   #ffb000;
+  --accent2:  #995500;
+  --warn:     #ff6600;
+  --danger:   #ff2200;
+  --success:  #88ff44;
+  --text:     #ffe8b0;
+  --muted:    #8a6a30;
+  --purple:   #ff88cc;
+  --glow-color: rgba(255,176,0,0.4);
+}
+
+[data-theme="light"] {
+  --bg:       #f4f6f9;
+  --surface:  #ffffff;
+  --surface2: #eef1f6;
+  --border:   #ccd4e0;
+  --accent:   #0077cc;
+  --accent2:  #0055aa;
+  --warn:     #e07000;
+  --danger:   #cc2244;
+  --success:  #008844;
+  --text:     #1a2a3a;
+  --muted:    #6678888;
+  --purple:   #7744cc;
+  --glow-color: rgba(0,119,204,0.25);
+  --scanline-opacity: 0; /* no scanlines on light theme */
+}
+
+[data-theme="highcontrast"] {
+  --bg:       #000000;
+  --surface:  #0a0a0a;
+  --surface2: #141414;
+  --border:   #ffffff44;
+  --accent:   #ffffff;
+  --accent2:  #cccccc;
+  --warn:     #ffff00;
+  --danger:   #ff0000;
+  --success:  #00ff00;
+  --text:     #ffffff;
+  --muted:    #aaaaaa;
+  --purple:   #ff88ff;
+  --glow-color: rgba(255,255,255,0.3);
+}
+
+/* CryoBlue HC — same hue as default but much higher contrast text/borders */
+[data-theme="cryohc"] {
+  --bg:       #000d18;
+  --surface:  #001a2e;
+  --surface2: #002440;
+  --border:   #006699;
+  --accent:   #00eeff;
+  --accent2:  #00aacc;
+  --warn:     #ffcc00;
+  --danger:   #ff4466;
+  --success:  #00ff99;
+  --text:     #ffffff;
+  --muted:    #88ccdd;
+  --purple:   #cc99ff;
+  --glow-color: rgba(0,238,255,0.5);
+}
+
+/* Light Warm — soft cream background, warm brown accents */
+[data-theme="lightwarm"] {
+  --bg:       #faf8f4;
+  --surface:  #ffffff;
+  --surface2: #f2ede4;
+  --border:   #d8cfc0;
+  --accent:   #8b5e3c;
+  --accent2:  #6b4226;
+  --warn:     #d97706;
+  --danger:   #c0392b;
+  --success:  #2e7d32;
+  --text:     #1a1208;
+  --muted:    #7a6652;
+  --purple:   #6b3fa0;
+  --glow-color: rgba(139,94,60,0.2);
+  --scanline-opacity: 0;
+}
+
+/* Light Cool — clean white with teal/slate accents, clinical feel */
+[data-theme="lightcool"] {
+  --bg:       #f0f4f8;
+  --surface:  #ffffff;
+  --surface2: #e4edf5;
+  --border:   #b8cfe0;
+  --accent:   #0369a1;
+  --accent2:  #075985;
+  --warn:     #b45309;
+  --danger:   #be123c;
+  --success:  #065f46;
+  --text:     #0f172a;
+  --muted:    #4a6070;
+  --purple:   #5b21b6;
+  --glow-color: rgba(3,105,161,0.2);
+  --scanline-opacity: 0;
+}
+
+/* ==========================================================================
+   DENSITY MODES
+   Density is applied via a data-density attribute on <html>.
+   It scales the spacing variables and slot height, leaving all other
+   styles unchanged.
+   ========================================================================== */
+[data-density="compact"] {
+  --space-xs:  2px;
+  --space-sm:  5px;
+  --space-md:  10px;
+  --space-lg:  16px;
+  --space-xl:  24px;
+  --slot-min-height: 52px;
+}
+[data-density="comfortable"] {
+  --space-xs:  6px;
+  --space-sm:  12px;
+  --space-md:  18px;
+  --space-lg:  28px;
+  --space-xl:  48px;
+  --slot-min-height: 84px;
+}
+
+/* ==========================================================================
+   BASE STYLES — use variables throughout, never hard-coded colours.
+   ========================================================================== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+body {
+  background:   var(--bg);
+  color:        var(--text);
+  font-family:  var(--font-sans);
+  font-size:    var(--font-size-base);
+  line-height:  var(--line-height);
+  min-height:   100vh;
+  overflow-x:   hidden;
+  transition:   background .25s, color .25s;
+}
+
+/* Scanline overlay — purely cosmetic CRT effect */
+body::before {
+  content:'';
+  position:fixed;inset:0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent, transparent 2px,
+    rgba(0,200,255,var(--scanline-opacity)) 2px,
+    rgba(0,200,255,var(--scanline-opacity)) 4px
+  );
+  pointer-events:none;
+  z-index:9999;
+}
+
+/* ── HEADER ─────────────────────────────────────────────────────────────── */
+header{
+  display:flex;align-items:center;gap:12px;
+  padding:10px var(--space-lg);
+  border-bottom:1px solid var(--border);
+  background:var(--surface);
+  position:sticky;top:0;z-index:200;
+  flex-wrap:wrap;
+  transition:background .25s,border-color .25s;
+}
+.logo{
+  font-family:var(--font-mono);
+  font-size:18px;color:var(--accent);
+  letter-spacing:2px;
+  text-shadow:0 0 12px var(--glow-color);
+  white-space:nowrap;flex-shrink:0;
+}
+.logo span{color:var(--muted);font-size:11px;margin-left:8px}
+
+/* ── Search bar ──────────────────────────────────────────────────────────── */
+.search-wrap{flex:1;min-width:180px;max-width:480px;position:relative}
+.search-input{
+  width:100%;
+  background:var(--bg);
+  border:1px solid var(--border);
+  color:var(--text);
+  font-family:var(--font-mono);
+  font-size:var(--font-size-sm);
+  padding:7px 36px 7px 12px;
+  outline:none;
+  transition:border-color .15s,background .25s;
+  border-radius:var(--radius);
+}
+.search-input:focus{border-color:var(--accent2)}
+.search-input::placeholder{color:var(--muted)}
+.search-icon{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none}
+.search-count{position:absolute;right:32px;top:50%;transform:translateY(-50%);font-family:var(--font-mono);font-size:10px;color:var(--accent2);display:none}
+
+.header-stats{display:flex;gap:16px;font-family:var(--font-mono);font-size:11px;color:var(--muted);flex-shrink:0}
+.header-stats .val{color:var(--accent);font-size:12px}
+.header-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+
+/* ── Researcher bar ──────────────────────────────────────────────────────── */
+.researcher-bar{
+  display:flex;align-items:center;gap:10px;
+  padding:6px var(--space-lg);
+  background:var(--surface2);
+  border-bottom:1px solid var(--border);
+  font-family:var(--font-mono);font-size:11px;color:var(--muted);
+}
+.researcher-bar input{
+  background:transparent;border:none;
+  border-bottom:1px solid var(--border);
+  color:var(--accent);font-family:var(--font-mono);
+  font-size:11px;padding:2px 6px;outline:none;width:160px;
+}
+
+.breadcrumb{
+  display:flex;align-items:center;gap:8px;
+  padding:10px var(--space-lg);
+  font-family:var(--font-mono);font-size:12px;color:var(--muted);
+  border-bottom:1px solid var(--border);
+}
+.crumb{cursor:pointer;color:var(--accent2);transition:color .15s}.crumb:hover{color:var(--accent)}
+.sep{color:var(--border)}.bc-active{color:var(--text);cursor:default}
+
+.main{padding:var(--space-lg)}
+
+/* ── Loading / Toast ────────────────────────────────────────────────────── */
+.loading-overlay{position:fixed;inset:0;background:rgba(7,13,20,.8);display:flex;align-items:center;justify-content:center;z-index:500;backdrop-filter:blur(2px)}
+.loading-spinner{font-family:var(--font-mono);color:var(--accent);font-size:13px;letter-spacing:2px;animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.toast-container{position:fixed;bottom:20px;right:20px;z-index:600;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{font-family:var(--font-mono);font-size:11px;padding:10px 16px;border:1px solid;min-width:220px;animation:slideIn .2s ease;border-radius:var(--radius)}
+.toast.ok {border-color:var(--success);color:var(--success);background:rgba(0,229,153,.08)}
+.toast.err{border-color:var(--danger);color:var(--danger);background:rgba(255,59,85,.08)}
+.toast.info{border-color:var(--accent2);color:var(--accent);background:rgba(0,200,255,.06)}
+@keyframes slideIn{from{transform:translateX(30px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.btn{
+  font-family:var(--font-mono);font-size:11px;letter-spacing:1px;
+  padding:6px var(--space-md);
+  border:1px solid var(--accent2);background:transparent;color:var(--accent);
+  cursor:pointer;transition:all .15s;text-transform:uppercase;white-space:nowrap;
+  border-radius:var(--radius);
+}
+.btn:hover{background:var(--accent2);color:#fff}
+.btn-sm{padding:3px 9px;font-size:10px}
+.btn-danger{border-color:var(--danger);color:var(--danger)}.btn-danger:hover{background:var(--danger);color:#fff}
+.btn-success{border-color:var(--success);color:var(--success)}.btn-success:hover{background:var(--success);color:#000}
+.btn-qr{border-color:#7c55ff;color:var(--purple)}.btn-qr:hover{background:#7c55ff;color:#fff}
+.btn-settings{border-color:var(--muted);color:var(--muted)}.btn-settings:hover{border-color:var(--accent);color:var(--accent);background:transparent}
+
+/* ── Section layout ──────────────────────────────────────────────────────── */
+.section-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:var(--space-md);flex-wrap:wrap;gap:10px}
+.section-left .section-title{font-family:var(--font-sans);font-size:20px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.section-left .section-sub{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:2px}
+.section-right{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* ── Card grid ────────────────────────────────────────────────────────────── */
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:var(--space-sm)}
+.card{background:var(--surface);border:1px solid var(--border);position:relative;overflow:hidden;transition:border-color .15s,background .25s;border-radius:var(--radius)}
+.card-accent{position:absolute;top:0;left:0;width:3px;height:100%;background:var(--accent2);transition:background .15s}
+.card:hover .card-accent{background:var(--accent)}.card:hover{border-color:var(--accent)}
+.card-body{padding:var(--space-md) var(--space-md) 8px;cursor:pointer}
+.card-label{font-family:var(--font-mono);font-size:var(--font-size-xs);color:var(--muted);text-transform:uppercase;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center}
+.card-title{font-family:var(--font-sans);font-size:17px;font-weight:700;color:var(--text);margin-bottom:8px}
+.card-meta{font-family:var(--font-mono);font-size:11px;color:var(--muted);line-height:1.9}
+.card-meta .val{color:var(--accent)}
+.fill-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:10px}
+.fill-bar-inner{height:100%;background:var(--accent);border-radius:2px}
+.fill-bar-inner.warn{background:var(--warn)}.fill-bar-inner.full{background:var(--danger)}
+.card-actions{display:flex;border-top:1px solid var(--border);background:var(--surface2)}
+.ca{flex:1;font-family:var(--font-mono);font-size:10px;padding:6px 2px;text-align:center;cursor:pointer;color:var(--muted);transition:all .15s;border:none;background:transparent;text-transform:uppercase}
+.ca:not(:last-child){border-right:1px solid var(--border)}
+.ca:hover{background:var(--surface);color:var(--accent)}.ca.del:hover{background:rgba(255,59,85,.15);color:var(--danger)}.ca.qr:hover{background:rgba(124,85,255,.15);color:var(--purple)}
+
+/* ── Rack / slot ─────────────────────────────────────────────────────────── */
+.rack-column{display:flex;flex-direction:column;gap:0;border:1px solid var(--border);max-width:680px;border-radius:var(--radius)}
+.slot-row{display:flex;align-items:stretch;border-bottom:1px solid var(--border);min-height:var(--slot-min-height);transition:background .12s}
+.slot-row:last-child{border-bottom:none}
+.slot-num{width:48px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:13px;font-weight:bold;color:var(--muted);border-right:1px solid var(--border);background:linear-gradient(180deg,var(--surface2) 0%,rgba(13,26,38,.6) 100%)}
+.slot-row.occupied .slot-num{color:var(--accent2)}.slot-row.occupied{cursor:pointer}
+.slot-row.occupied:hover{background:var(--surface2)}.slot-row.occupied:hover .slot-num{color:var(--accent)}
+.slot-content{flex:1;display:flex;align-items:center;padding:10px var(--space-md);gap:var(--space-md)}
+.slot-box-name{font-family:var(--font-sans);font-size:16px;font-weight:700;color:var(--text);min-width:110px}
+.slot-box-meta{font-family:var(--font-mono);font-size:var(--font-size-xs);color:var(--muted);line-height:1.8;flex:1}
+.slot-box-meta .val{color:var(--accent)}
+.slot-fill-wrap{width:80px;flex-shrink:0}
+.slot-fill-label{font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-bottom:3px;text-align:right}
+.slot-fill-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.slot-fill-inner{height:100%;background:var(--accent);border-radius:2px}
+.slot-fill-inner.warn{background:var(--warn)}.slot-fill-inner.full{background:var(--danger)}
+.slot-actions{display:flex;flex-direction:column;gap:4px;flex-shrink:0;opacity:0;transition:opacity .15s}.slot-row:hover .slot-actions{opacity:1}
+.slot-row.empty{background:var(--bg)}.slot-row.empty:hover{background:var(--surface)}
+.slot-empty-label{font-family:var(--font-mono);font-size:11px;color:var(--border);flex:1;letter-spacing:1px}.slot-row.empty:hover .slot-empty-label{color:var(--muted)}
+.rack-legend{display:flex;gap:16px;align-items:center;margin-bottom:12px;font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.rack-legend .leg-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.rack-top-label,.rack-bottom-label{font-family:var(--font-mono);font-size:10px;color:var(--muted);padding:4px var(--space-md);border:1px solid var(--border);display:inline-block;background:var(--surface2);letter-spacing:1px}
+.rack-top-label{border-bottom:none}.rack-bottom-label{border-top:none}
+
+/* ── Vial grid ───────────────────────────────────────────────────────────── */
+.box-view{display:flex;gap:var(--space-lg);flex-wrap:wrap;align-items:flex-start}
+.vial-grid-wrap{flex:0 0 auto;max-width:100%}
+.col-labels-row{display:flex;margin-bottom:4px}
+.col-label-spacer{width:22px;flex-shrink:0}
+.col-label{font-family:var(--font-mono);font-size:9px;color:var(--muted);text-align:center}
+.row-wrap{display:flex;align-items:center;gap:4px;margin-bottom:4px}
+.row-label{font-family:var(--font-mono);font-size:9px;color:var(--muted);width:20px;text-align:right;flex-shrink:0}
+.vial{aspect-ratio:1;border:1px solid var(--border);background:var(--surface);cursor:pointer;transition:all .12s;display:flex;align-items:center;justify-content:center;font-size:7px;font-family:var(--font-mono);color:var(--muted);border-radius:var(--radius);min-width:18px;min-height:18px;position:relative}
+.vial.occupied{background:rgba(0,120,180,.25);border-color:var(--accent2);color:var(--accent)}
+.vial.has-qr::after{content:'▦';position:absolute;top:1px;right:1px;font-size:5px;color:var(--purple);line-height:1}
+.vial.selected{border-color:var(--accent);background:rgba(0,200,255,.2);box-shadow:0 0 8px var(--glow-color)}
+.vial.highlighted{border-color:var(--warn);background:rgba(255,149,0,.2);box-shadow:0 0 8px rgba(255,149,0,.4)}
+.vial:hover{border-color:var(--accent);background:rgba(0,200,255,.1)}
+.legend{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+.legend-box{width:12px;height:12px;border:1px solid;border-radius:2px}
+.info-panel{background:var(--surface);border:1px solid var(--border);padding:var(--space-md);min-width:220px;max-width:260px;flex:0 0 240px;border-radius:var(--radius)}
+.info-panel h3{font-family:var(--font-mono);font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.info-field{margin-bottom:9px}
+.info-label{font-family:var(--font-mono);font-size:9px;color:var(--muted);text-transform:uppercase;margin-bottom:2px}
+.info-value{font-family:var(--font-mono);font-size:12px;color:var(--text);word-break:break-all}
+.info-actions{display:flex;flex-direction:column;gap:5px;margin-top:10px}
+
+/* ── Forms ───────────────────────────────────────────────────────────────── */
+.form-group{margin-bottom:11px}
+.form-label{font-family:var(--font-mono);font-size:var(--font-size-xs);color:var(--muted);text-transform:uppercase;display:block;margin-bottom:3px}
+.form-input,.form-select,.form-textarea{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--font-mono);font-size:var(--font-size-sm);padding:6px 9px;outline:none;transition:border-color .15s,background .25s;border-radius:var(--radius)}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent2)}
+.form-textarea{resize:vertical;min-height:50px}
+.form-select option{background:var(--surface)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.scan-row{display:flex;gap:6px}.scan-row .form-input{flex:1}
+.qr-hint{font-family:var(--font-mono);font-size:10px;color:var(--purple);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.form-hint{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:3px}
+
+/* ── Modal ───────────────────────────────────────────────────────────────── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:300;padding:16px}
+.modal{background:var(--surface);border:1px solid var(--accent2);padding:var(--space-lg);width:420px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 0 30px rgba(0,200,255,.15);border-radius:var(--radius)}
+.modal h2{font-family:var(--font-mono);font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.modal-actions{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+.badge{font-family:var(--font-mono);font-size:9px;padding:2px 7px;border:1px solid;border-radius:2px;display:inline-block}
+.badge-ok{border-color:var(--success);color:var(--success)}.badge-warn{border-color:var(--warn);color:var(--warn)}.badge-full{border-color:var(--danger);color:var(--danger)}
+.tag{display:inline-block;background:rgba(0,120,180,.2);border:1px solid var(--accent2);color:var(--accent);font-family:var(--font-mono);font-size:10px;padding:1px 6px;border-radius:2px}
+.qr-badge{display:inline-block;background:rgba(124,85,255,.18);border:1px solid #7c55ff;color:var(--purple);font-family:var(--font-mono);font-size:9px;padding:1px 6px;border-radius:2px;margin-left:5px}
+.empty-state{font-family:var(--font-mono);font-size:12px;color:var(--muted);padding:var(--space-xl);text-align:center;border:1px dashed var(--border);border-radius:var(--radius)}
+.confirm-box{background:var(--surface);border:1px solid var(--danger);padding:var(--space-lg);width:340px;max-width:100%;box-shadow:0 0 30px rgba(255,59,85,.2);border-radius:var(--radius)}
+.confirm-box h2{font-family:var(--font-mono);font-size:12px;color:var(--danger);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+.confirm-box p{font-family:var(--font-mono);font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:16px}
+
+/* ── Search results ──────────────────────────────────────────────────────── */
+.search-header{margin-bottom:18px}
+.search-header .search-title{font-family:var(--font-sans);font-size:20px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.search-header .search-sub{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:2px}
+.search-filters{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
+.filter-pill{font-family:var(--font-mono);font-size:10px;letter-spacing:1px;padding:4px 12px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s;text-transform:uppercase;border-radius:var(--radius)}
+.filter-pill:hover{border-color:var(--accent2);color:var(--accent)}.filter-pill.active{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.filter-pill .pill-count{margin-left:5px;opacity:.7}
+.results-section{margin-bottom:28px}
+.results-section-title{font-family:var(--font-mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.results-section-title .count-badge{font-size:10px;padding:1px 7px;border:1px solid;border-radius:2px}
+.rack-count-badge{border-color:var(--accent2);color:var(--accent)}.box-count-badge{border-color:var(--warn);color:var(--warn)}.vial-count-badge{border-color:var(--success);color:var(--success)}
+.result-card{display:flex;align-items:center;gap:var(--space-md);padding:12px var(--space-md);background:var(--surface);border:1px solid var(--border);cursor:pointer;transition:all .12s;margin-bottom:6px;border-radius:var(--radius)}
+.result-card:hover{border-color:var(--accent);background:var(--surface2)}
+.result-icon{width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:11px;font-weight:bold;border:1px solid;border-radius:var(--radius);flex-shrink:0}
+.result-icon.rack{border-color:var(--accent2);color:var(--accent);background:rgba(0,120,180,.15)}.result-icon.box{border-color:var(--warn);color:var(--warn);background:rgba(255,149,0,.1)}.result-icon.vial{border-color:var(--success);color:var(--success);background:rgba(0,229,153,.1)}
+.result-body{flex:1;min-width:0}
+.result-name{font-family:var(--font-sans);font-size:15px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.result-path{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.result-match{font-family:var(--font-mono);font-size:10px;color:var(--accent2);margin-top:3px}
+.result-match mark{background:rgba(0,200,255,.2);color:var(--accent);border-radius:2px;padding:0 2px}
+.result-meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
+.result-arrow{color:var(--muted);font-size:14px;transition:color .12s}.result-card:hover .result-arrow{color:var(--accent)}
+.search-empty{font-family:var(--font-mono);font-size:13px;color:var(--muted);padding:40px;text-align:center;border:1px dashed var(--border);border-radius:var(--radius)}
+.search-empty .search-empty-term{color:var(--text)}.search-empty .search-empty-hint{font-size:11px;margin-top:8px;opacity:.7}
+
+/* ── History ─────────────────────────────────────────────────────────────── */
+.history-filters{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.history-table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:11px}
+.history-table th{text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px}
+.history-table td{padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:top}
+.history-table tr:hover td{background:var(--surface2)}
+.action-badge{display:inline-block;font-size:9px;padding:1px 6px;border-radius:2px;border:1px solid;text-transform:uppercase}
+.action-create{border-color:var(--success);color:var(--success)}.action-update{border-color:var(--accent2);color:var(--accent)}.action-delete{border-color:var(--danger);color:var(--danger)}
+.diff-old{color:var(--danger);text-decoration:line-through;font-size:10px}.diff-new{color:var(--success);font-size:10px}
+.pagination{display:flex;gap:8px;align-items:center;margin-top:16px;font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+
+/* ── QR Scanner ──────────────────────────────────────────────────────────── */
+#scanner-overlay{position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.93);align-items:center;justify-content:center;display:none}
+.scanner-box{background:var(--surface);border:1px solid var(--accent);padding:var(--space-lg);width:340px;max-width:95vw;border-radius:var(--radius)}
+.scanner-box h2{font-family:var(--font-mono);font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.scanner-video-wrap{position:relative;background:#000;text-align:center;margin-bottom:12px;overflow:hidden}
+#qr-video{width:100%;max-height:220px;display:block}
+.sc-corner{position:absolute;width:20px;height:20px;border-color:var(--accent);border-style:solid}
+.sc-tl{top:0;left:0;border-width:2px 0 0 2px}.sc-tr{top:0;right:0;border-width:2px 2px 0 0}.sc-bl{bottom:0;left:0;border-width:0 0 2px 2px}.sc-br{bottom:0;right:0;border-width:0 2px 2px 0}
+#scan-status{font-family:var(--font-mono);font-size:11px;text-align:center;margin-bottom:10px;padding:6px;background:var(--bg);color:var(--muted)}
+#scan-status.detecting{color:var(--accent);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.qr-display-wrap{text-align:center;padding:14px 0}
+.qr-display-wrap .qr-value{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:10px;word-break:break-all;max-width:220px;margin-left:auto;margin-right:auto}
+
+/* ==========================================================================
+   SETTINGS VIEW
+   ========================================================================== */
+.settings-view{max-width:720px}
+.settings-section{margin-bottom:28px}
+.settings-section-title{
+  font-family:var(--font-mono);font-size:11px;color:var(--muted);
+  text-transform:uppercase;letter-spacing:2px;
+  margin-bottom:14px;padding-bottom:8px;
+  border-bottom:1px solid var(--border);
+}
+
+/* Swatch grid — for colour scheme selection */
+.swatch-grid{display:flex;gap:10px;flex-wrap:wrap}
+.swatch{
+  width:64px;
+  cursor:pointer;
+  border:2px solid transparent;
+  border-radius:var(--radius);
+  overflow:hidden;
+  transition:border-color .15s,transform .1s;
+}
+.swatch:hover{transform:scale(1.05)}
+.swatch.active{border-color:var(--accent)}
+.swatch-preview{
+  height:36px;
+  display:flex;gap:2px;padding:4px;
+}
+.swatch-preview span{flex:1;border-radius:1px}
+.swatch-label{
+  font-family:var(--font-mono);font-size:9px;color:var(--muted);
+  text-align:center;padding:4px 2px;background:var(--surface2);
+  line-height:1.2;
+}
+.swatch.active .swatch-label{color:var(--accent)}
+
+/* Font option cards */
+.font-grid{display:flex;gap:10px;flex-wrap:wrap}
+.font-card{
+  padding:10px 14px;
+  border:1px solid var(--border);
+  cursor:pointer;transition:all .15s;min-width:140px;
+  border-radius:var(--radius);background:var(--surface);
+}
+.font-card:hover{border-color:var(--accent2)}
+.font-card.active{border-color:var(--accent);background:var(--surface2)}
+.font-card-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px}
+.font-card-sample{font-size:11px;color:var(--muted)}
+
+/* Range sliders */
+.settings-slider-row{display:flex;align-items:center;gap:14px}
+.settings-slider{
+  flex:1;-webkit-appearance:none;appearance:none;
+  height:3px;background:var(--border);outline:none;border-radius:2px;cursor:pointer;
+}
+.settings-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:14px;height:14px;border-radius:50%;
+  background:var(--accent);cursor:pointer;border:2px solid var(--bg);
+}
+.settings-slider::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid var(--bg)}
+.slider-value{font-family:var(--font-mono);font-size:11px;color:var(--accent);min-width:36px;text-align:right}
+
+/* Radius option toggle */
+.radius-options{display:flex;gap:8px}
+.radius-btn{
+  width:44px;height:36px;cursor:pointer;
+  border:1px solid var(--border);background:var(--surface);
+  display:flex;align-items:center;justify-content:center;
+  transition:all .15s;position:relative;
+}
+.radius-btn:hover{border-color:var(--accent2)}.radius-btn.active{border-color:var(--accent);background:var(--surface2)}
+.radius-btn .r-demo{
+  width:20px;height:20px;
+  border:2px solid var(--muted);background:transparent;
+}
+
+/* Toggle switch */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-label{font-family:var(--font-mono);font-size:11px;color:var(--text)}
+.toggle-sub{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:2px}
+.toggle-switch{
+  width:36px;height:20px;background:var(--border);border-radius:10px;
+  cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;
+}
+.toggle-switch.on{background:var(--accent2)}
+.toggle-switch::after{
+  content:'';position:absolute;top:3px;left:3px;
+  width:14px;height:14px;border-radius:50%;background:#fff;
+  transition:transform .2s;
+}
+.toggle-switch.on::after{transform:translateX(16px)}
+
+/* Density selector */
+.density-options{display:flex;gap:8px}
+.density-btn{
+  padding:8px 16px;border:1px solid var(--border);
+  background:var(--surface);cursor:pointer;transition:all .15s;
+  font-family:var(--font-mono);font-size:10px;color:var(--muted);
+  text-transform:uppercase;letter-spacing:1px;border-radius:var(--radius);
+}
+.density-btn:hover{border-color:var(--accent2);color:var(--accent)}.density-btn.active{border-color:var(--accent);color:var(--accent);background:var(--surface2)}
+
+/* ==========================================================================
+   QR VIAL SCAN WORKFLOW
+   The scan workflow is a multi-step modal. Each step replaces the modal
+   body content. A step indicator at the top shows progress.
+   ========================================================================== */
+
+/* Workflow step indicator */
+.wf-steps{
+  display:flex;align-items:center;gap:0;
+  margin-bottom:18px;padding-bottom:14px;
+  border-bottom:1px solid var(--border);
+}
+.wf-step{
+  flex:1;text-align:center;
+  font-family:var(--font-mono);font-size:9px;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.5px;
+  position:relative;
+}
+.wf-step::before{
+  content:'';display:block;
+  width:22px;height:22px;border-radius:50%;
+  border:1px solid var(--border);background:var(--bg);
+  margin:0 auto 5px;
+  font-family:var(--font-mono);font-size:10px;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--muted);
+}
+.wf-step.done::before{
+  background:var(--accent2);border-color:var(--accent);color:#fff;
+  content:'✓';
+}
+.wf-step.active::before{
+  border-color:var(--accent);color:var(--accent);box-shadow:0 0 8px var(--glow-color);
+}
+.wf-step-line{width:24px;height:1px;background:var(--border);flex-shrink:0}
+.wf-step.done+.wf-step-line{background:var(--accent2)}
+
+/* Found / not-found result cards inside the workflow modal */
+.wf-result-card{
+  background:var(--surface2);border:1px solid var(--border);
+  padding:14px;margin-bottom:14px;border-radius:var(--radius);
+}
+.wf-result-card.found{border-color:var(--success)}
+.wf-result-card.notfound{border-color:var(--warn)}
+.wf-result-title{
+  font-family:var(--font-mono);font-size:10px;
+  text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;
+}
+.wf-result-card.found .wf-result-title{color:var(--success)}
+.wf-result-card.notfound .wf-result-title{color:var(--warn)}
+.wf-result-name{
+  font-family:var(--font-sans);font-size:17px;font-weight:700;
+  color:var(--text);margin-bottom:4px;
+}
+.wf-result-path{
+  font-family:var(--font-mono);font-size:10px;color:var(--muted);
+  margin-bottom:8px;
+}
+.wf-result-meta{
+  display:flex;gap:10px;flex-wrap:wrap;
+}
+.wf-chip{
+  font-family:var(--font-mono);font-size:10px;
+  padding:2px 8px;border:1px solid var(--border);
+  color:var(--muted);border-radius:2px;
+}
+
+/* Step: select rack / box / position */
+.wf-select-list{
+  display:flex;flex-direction:column;gap:6px;
+  max-height:260px;overflow-y:auto;
+  margin-bottom:14px;
+}
+.wf-select-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 12px;
+  background:var(--surface2);border:1px solid var(--border);
+  cursor:pointer;transition:all .12s;border-radius:var(--radius);
+}
+.wf-select-item:hover{border-color:var(--accent);background:var(--surface)}
+.wf-select-item-left{flex:1}
+.wf-select-item-name{
+  font-family:var(--font-sans);font-size:15px;font-weight:600;color:var(--text);
+}
+.wf-select-item-sub{
+  font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:2px;
+}
+.wf-select-item-arrow{color:var(--muted);font-size:14px}
+.wf-select-item:hover .wf-select-item-arrow{color:var(--accent)}
+
+/* Vial grid inside the position-picker step */
+.wf-grid-wrap{margin-bottom:14px}
+.wf-grid-label{
+  font-family:var(--font-mono);font-size:10px;color:var(--muted);
+  margin-bottom:8px;
+}
+/* Reuse .vial styles — position picker shares the same cell rendering */
+
+/* Live preview panel */
+.settings-preview{
+  background:var(--surface2);border:1px solid var(--border);
+  padding:var(--space-md);margin-top:20px;
+  border-radius:var(--radius);
+}
+.settings-preview-title{font-family:var(--font-mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+.preview-chip{display:inline-block;padding:2px 8px;border:1px solid;border-radius:2px;font-family:var(--font-mono);font-size:10px;margin:2px}
+
+/* ==========================================================================
+   MOVE MODAL — shared with wf-select styles but needs a distinct look
+   for the "current location" breadcrumb shown at each step
+   ========================================================================== */
+.move-from{
+  background:var(--surface2);border:1px solid var(--accent2);
+  padding:10px 12px;margin-bottom:14px;border-radius:var(--radius);
+  font-family:var(--font-mono);font-size:11px;
+}
+.move-from-label{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+.move-from-value{color:var(--accent)}
+.btn-move{border-color:var(--purple);color:var(--purple)}.btn-move:hover{background:var(--purple);color:#fff}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">CRYOVAULT <span>// LN₂</span></div>
+  <div class="search-wrap">
+    <input class="search-input" id="global-search" type="search" placeholder="Search vials, boxes, racks, QR codes…" autocomplete="off" spellcheck="false"/>
+    <span class="search-count" id="search-count"></span>
+    <span class="search-icon">⌕</span>
+  </div>
+  <div class="header-stats">
+    <div>TANK <span class="val" id="hdr-tank">—</span></div>
+    <div>RACKS <span class="val" id="hdr-racks">—</span></div>
+    <div>BOXES <span class="val" id="hdr-boxes">—</span></div>
+    <div>VIALS <span class="val" id="hdr-vials">—</span>/<span class="val" id="hdr-cap">—</span></div>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-settings" onclick="goSettings()" title="Appearance settings">⚙ SETTINGS</button>
+    <button class="btn" onclick="goArchive()">🗄 ARCHIVE</button>
+    <button class="btn" onclick="goHistory()">⏱ HISTORY</button>
+    <button class="btn btn-warn" onclick="openExportModal()">↓ EXPORT</button>
+  </div>
+</header>
+
+<div class="researcher-bar">
+  <span>RESEARCHER:</span>
+  <input id="researcher-name" placeholder="Your name (logged with changes)"/>
+</div>
+
+<div class="breadcrumb" id="breadcrumb"></div>
+<div class="main" id="main-content"></div>
+<div class="toast-container" id="toast-container"></div>
+<div class="loading-overlay" id="loading" style="display:none"><div class="loading-spinner">LOADING…</div></div>
+<div class="modal-overlay" id="modal" style="display:none"><div id="modal-body"></div></div>
+<div id="scanner-overlay" style="display:none">
+  <div class="scanner-box">
+    <h2>▦ SCAN QR CODE</h2>
+    <div class="scanner-video-wrap"><video id="qr-video" autoplay playsinline muted></video><div class="sc-corner sc-tl"></div><div class="sc-corner sc-tr"></div><div class="sc-corner sc-bl"></div><div class="sc-corner sc-br"></div></div>
+    <div id="scan-status">Accessing camera…</div>
+    <div class="form-group"><label class="form-label">Or enter manually</label><div class="scan-row"><input class="form-input" id="qr-manual" placeholder="QR value…"/><button class="btn btn-success" onclick="useManualQR()">USE</button></div></div>
+    <div class="modal-actions"><button class="btn btn-danger" onclick="stopScanner()">CANCEL</button></div>
+  </div>
+</div>
+
+<script>
+// ============================================================================
+// SETTINGS SYSTEM
+// ============================================================================
+// All appearance settings are stored as a plain object in localStorage under
+// the key "cryovault_settings". On every page load we read this object and
+// apply the settings to the <html> element as data-* attributes and CSS
+// custom property overrides.
+//
+// WHY localStorage?
+//   Settings are per-browser-session preferences that have nothing to do with
+//   lab data. They don't belong in the server database. localStorage is the
+//   correct and conventional place for this, and this code runs in the user's
+//   own browser against their own deployed server — not inside a sandboxed
+//   Claude artifact.
+//
+// SETTINGS SCHEMA
+//   {
+//     theme:       string  — data-theme attribute value
+//     fontMono:    string  — CSS font-family for monospace elements
+//     fontSans:    string  — CSS font-family for heading/body elements
+//     fontSize:    number  — base font size in px (12–20)
+//     density:     string  — "compact" | "normal" | "comfortable"
+//     radius:      number  — border-radius in px (0 | 4 | 8)
+//     scanlines:   boolean — show CRT scanline overlay
+//   }
+// ============================================================================
+
+const SETTINGS_KEY = 'cryovault_settings';
+
+const DEFAULTS = {
+  theme:    'default',
+  fontMono: 'Share Tech Mono',
+  fontSans: 'Rajdhani',
+  fontSize: 15,
+  density:  'normal',
+  radius:   2,
+  scanlines:       true,
+  archiveOnDelete: false,  // when true, deletes become soft-deletes (archived)
+};
+
+// Theme colour palettes — used to render swatch previews
+const THEMES = [
+  { key:'default',     label:'CryoBlue',   colors:['#070d14','#00c8ff','#0077aa','#ff3b55'] },
+  { key:'cryohc',      label:'Cryo HC',    colors:['#000d18','#00eeff','#00aacc','#ff4466'] },
+  { key:'midnight',    label:'Midnight',   colors:['#08070f','#9b7dff','#5a3fbf','#ff4466'] },
+  { key:'biohazard',   label:'Biohazard',  colors:['#070f07','#39ff14','#1a8a00','#ff3300'] },
+  { key:'amber',       label:'Amber',      colors:['#0e0900','#ffb000','#995500','#ff2200'] },
+  { key:'highcontrast',label:'Hi-Contrast',colors:['#000000','#ffffff','#cccccc','#ff0000'] },
+  { key:'light',       label:'Light',      colors:['#f4f6f9','#0077cc','#0055aa','#cc2244'] },
+  { key:'lightwarm',   label:'Light Warm', colors:['#faf8f4','#8b5e3c','#6b4226','#c0392b'] },
+  { key:'lightcool',   label:'Light Cool', colors:['#f0f4f8','#0369a1','#075985','#be123c'] },
+];
+
+// Font pair options
+const FONT_PAIRS = [
+  { mono:'Share Tech Mono', sans:'Rajdhani',      label:'CryoVault',  sample:'HEK293 · B04' },
+  { mono:'IBM Plex Mono',   sans:'IBM Plex Sans', label:'IBM Plex',   sample:'HEK293 · B04' },
+  { mono:'JetBrains Mono',  sans:'Inter',         label:'JetBrains',  sample:'HEK293 · B04' },
+  { mono:'Fira Code',       sans:'Space Grotesk', label:'Fira/Space',  sample:'HEK293 · B04' },
+  { mono:'Source Code Pro', sans:'Inter',         label:'Source/Inter',sample:'HEK293 · B04' },
+  { mono:'DM Mono',         sans:'Inter',         label:'DM Mono',    sample:'HEK293 · B04' },
+];
+
+// Read settings from localStorage, merging with defaults so new settings
+// added in future versions always have a value.
+function loadSettings() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    return { ...DEFAULTS, ...stored };
+  } catch {
+    return { ...DEFAULTS };
+  }
+}
+
+function saveSettings(s) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+}
+
+// Apply all settings to the DOM.
+// This is called once on page load and every time a setting changes.
+function applySettings(s) {
+  const root = document.documentElement;
+
+  // Colour theme — via data-theme attribute picked up by CSS selectors above
+  root.setAttribute('data-theme', s.theme === 'default' ? '' : s.theme);
+
+  // Font families — update the CSS custom properties directly
+  root.style.setProperty('--font-mono', `'${s.fontMono}', monospace`);
+  root.style.setProperty('--font-sans', `'${s.fontSans}', sans-serif`);
+
+  // Base font size — scales the entire UI
+  root.style.setProperty('--font-size-base', `${s.fontSize}px`);
+  root.style.setProperty('--font-size-sm',   `${Math.round(s.fontSize * 0.8)}px`);
+  root.style.setProperty('--font-size-xs',   `${Math.round(s.fontSize * 0.667)}px`);
+
+  // Density — via data-density attribute
+  root.setAttribute('data-density', s.density === 'normal' ? '' : s.density);
+
+  // Border radius
+  root.style.setProperty('--radius', `${s.radius}px`);
+
+  // Scanline overlay
+  root.style.setProperty('--scanline-opacity', s.scanlines ? '0.012' : '0');
+}
+
+// Current settings — initialise immediately so styles apply before first render
+let settings = loadSettings();
+applySettings(settings);
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+const API = '';
+let view='home', curTank=null, curRack=null, curBox=null, selVial=null;
+let searchTerm='', searchFilter='all', searchResults=null, searchDebounce=null;
+let highlightVial=null;
+let historyPage=1, historyFilter={entity_type:'',action:'',search:''};
+let scanStream=null, scanRAF=null, scanTargetId=null;
+
+const rowLbl  = i => String.fromCharCode(65+i);
+const colLbl  = i => String(i+1).padStart(2,'0');
+const fmtDate = d => d?new Date(d).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}):'—';
+const fmtTs   = d => d?new Date(d).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+const getRes  = () => document.getElementById('researcher-name').value.trim()||'anonymous';
+const boxSzLbl= b => `${b.rows}×${b.cols}`;
+const fillCls = p => p>=95?'full':p>=75?'warn':'';
+const badgeHtml=p => { const c=fillCls(p); return `<span class="badge badge-${c||'ok'}">${c==='full'?'FULL':c==='warn'?'HIGH':'OK'}</span>`; };
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function highlight(text,term){ if(!text||!term) return escHtml(text||''); const esc=term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); return escHtml(String(text)).replace(new RegExp(`(${esc})`,'gi'),'<mark>$1</mark>'); }
+const FIELD_LABELS={name:'Name',sample_type:'Type',researcher:'Researcher',qr_code:'QR Code',notes:'Notes',volume:'Volume',concentration:'Cell Number',position:'Position'};
+
+// ── LOADING & TOAST ───────────────────────────────────────────────────────────
+function showLoading(){document.getElementById('loading').style.display='flex';}
+function hideLoading(){document.getElementById('loading').style.display='none';}
+function toast(msg,type='ok'){const c=document.getElementById('toast-container');const el=document.createElement('div');el.className=`toast ${type}`;el.textContent=msg;c.appendChild(el);setTimeout(()=>el.remove(),3500);}
+
+// ── API ───────────────────────────────────────────────────────────────────────
+async function api(method,path,body=null){
+  const opts={method,headers:{'Content-Type':'application/json'}};
+  if(body) opts.body=JSON.stringify(body);
+  const res=await fetch(`${API}/api${path}`,opts);
+  if(!res.ok){const e=await res.json().catch(()=>({error:res.statusText}));throw new Error(e.error||res.statusText);}
+  return res.json();
+}
+
+// ── HEADER STATS ──────────────────────────────────────────────────────────────
+async function refreshStats(){
+  if(!curTank) return;
+  const h=await api('GET','/health').catch(()=>null);
+  if(h){document.getElementById('hdr-racks').textContent=h.racks;document.getElementById('hdr-boxes').textContent=h.boxes;document.getElementById('hdr-vials').textContent=h.vials;}
+  const racks=await api('GET',`/tanks/${curTank.id}/racks`).catch(()=>[]);
+  let cap=0; for(const r of racks){const boxes=await api('GET',`/racks/${r.id}/boxes`).catch(()=>[]);for(const b of boxes) cap+=b.rows*b.cols;}
+  document.getElementById('hdr-cap').textContent=cap;
+}
+
+// ── BREADCRUMB ────────────────────────────────────────────────────────────────
+function updateBreadcrumb(){
+  // Top level is now the tank LIST, not a single tank
+  let h=`<span class="crumb" onclick="goTankList()">TANKS</span>`;
+  if(curTank && (view==='home'||view==='rack'||view==='box')) {
+    h+=`<span class="sep"> / </span><span class="${view==='home'?'bc-active':'crumb'}" onclick="goHome()">${escHtml(curTank.name)}</span>`;
+  }
+  if(view==='rack'||view==='box') h+=`<span class="sep"> / </span><span class="${view==='rack'?'bc-active':'crumb'}" onclick="goRack(curRack.id)">${curRack?escHtml(curRack.name):''}</span>`;
+  if(view==='box') h+=`<span class="sep"> / </span><span class="bc-active">${curBox?escHtml(curBox.name):''}</span>`;
+  if(view==='history')  h+=`<span class="sep"> / </span><span class="bc-active">HISTORY</span>`;
+  if(view==='search')   h+=`<span class="sep"> / </span><span class="bc-active">SEARCH: ${escHtml(searchTerm)}</span>`;
+  if(view==='settings') h+=`<span class="sep"> / </span><span class="bc-active">SETTINGS</span>`;
+  if(view==='archive')  h+=`<span class="sep"> / </span><span class="bc-active">ARCHIVE</span>`;
+  if(view==='tanks')    h=`<span class="bc-active">TANKS</span>`;
+  document.getElementById('breadcrumb').innerHTML=h;
+}
+
+// ── ROUTER ────────────────────────────────────────────────────────────────────
+async function init(){
+  showLoading();
+  try{
+    // Start at the tank list so users can choose which tank to work with
+    await renderTankList();
+  }
+  catch(e){toast('Cannot reach server: '+e.message,'err');document.getElementById('main-content').innerHTML=`<div class="empty-state">⚠ Cannot connect to CryoVault server.<br>${escHtml(e.message)}</div>`;}
+  finally{hideLoading();}
+}
+
+async function goTankList(){view='tanks';curTank=null;curRack=null;curBox=null;selVial=null;document.getElementById('hdr-tank').textContent='—';updateBreadcrumb();await renderTankList();}
+async function goHome(){view='home';curRack=null;curBox=null;selVial=null;highlightVial=null;updateBreadcrumb();await renderHome();}
+async function goRack(id){showLoading();try{curRack=await api('GET',`/racks/${id}`);view='rack';curBox=null;selVial=null;updateBreadcrumb();await renderRack();}catch(e){toast(e.message,'err');}finally{hideLoading();}}
+async function goBox(rId,bId){showLoading();try{const{box,vials}=await api('GET',`/boxes/${bId}/vials`);curBox=box;curBox._vials=vials;if(!curRack||curRack.id!==rId) curRack=await api('GET',`/racks/${rId}`);view='box';updateBreadcrumb();renderBox();}catch(e){toast(e.message,'err');}finally{hideLoading();}}
+function goHistory(){view='history';historyPage=1;updateBreadcrumb();renderHistory();}
+function goSettings(){view='settings';updateBreadcrumb();renderSettings();}
+function goArchive(){view='archive';updateBreadcrumb();renderArchive();}
+async function goBoxHighlight(rId,bId,row,col){highlightVial={r:row,c:col};selVial={r:row,c:col};await goBox(rId,bId);}
+
+// ── TANK LIST VIEW ────────────────────────────────────────────────────────────
+async function renderTankList(){
+  view='tanks';
+  showLoading();
+  const el=document.getElementById('main-content');
+  try{
+    const tanks=await api('GET','/tanks');
+
+    // Store tanks in a module-level cache so selectTank(id) can look them up
+    // without passing serialised objects through onclick attributes.
+    window._tankCache = {};
+    for (const t of tanks) window._tankCache[t.id] = t;
+
+    // Header stats from /api/health (global, not per-tank)
+    const health=await api('GET','/health').catch(()=>null);
+    if(health){
+      document.getElementById('hdr-racks').textContent=health.racks;
+      document.getElementById('hdr-boxes').textContent=health.boxes;
+      document.getElementById('hdr-vials').textContent=health.vials;
+    }
+    document.getElementById('hdr-tank').textContent=`${tanks.length} tank${tanks.length!==1?'s':''}`;
+
+    let h=`<div class="section-header">
+      <div class="section-left">
+        <div class="section-title">Tanks</div>
+        <div class="section-sub">${tanks.length} LN₂ storage tank${tanks.length!==1?'s':''}</div>
+      </div>
+      <div class="section-right">
+        <button class="btn btn-success" onclick="openAddTank()">＋ ADD TANK</button>
+      </div>
+    </div>`;
+
+    if(!tanks.length){
+      h+=`<div class="empty-state">No tanks configured.<br>Click + ADD TANK to create one.</div>`;
+    } else {
+      h+=`<div class="card-grid">`;
+      for(const tank of tanks){
+        const racks=await api('GET',`/tanks/${tank.id}/racks`).catch(()=>[]);
+        let vialCount=0,capCount=0;
+        for(const r of racks){
+          const boxes=await api('GET',`/racks/${r.id}/boxes`).catch(()=>[]);
+          for(const b of boxes){
+            capCount+=b.rows*b.cols;
+            const res=await api('GET',`/boxes/${b.id}/vials`).catch(()=>({vials:[]}));
+            vialCount+=(res.vials||[]).length;
+          }
+        }
+        const p  = capCount ? Math.round(vialCount/capCount*100) : 0;
+        const cl = fillCls(p);
+        // Use a data attribute instead of inline onclick — avoids all
+        // character-escaping and serialisation issues.
+        h+=`<div class="card" data-tankid="${tank.id}">
+          <div class="card-accent"></div>
+          <div class="card-body">
+            <div class="card-label"><span>TANK · ${tank.id.slice(0,8)}</span></div>
+            <div class="card-title">${escHtml(tank.name)}</div>
+            <div class="card-meta">
+              Racks: <span class="val">${racks.length}</span><br>
+              Vials: <span class="val">${vialCount}/${capCount}</span> ${badgeHtml(p)}<br>
+              Temp: <span class="val">${escHtml(tank.temperature||'—')}</span>
+            </div>
+            <div class="fill-bar"><div class="fill-bar-inner ${cl}" style="width:${p}%"></div></div>
+          </div>
+          <div class="card-actions">
+            <button class="ca" data-edit-tank="${tank.id}">✎ EDIT</button>
+            <button class="ca del" data-del-tank="${tank.id}">✕ DEL</button>
+          </div>
+        </div>`;
+      }
+      h+=`</div>`;
+    }
+    el.innerHTML=h;
+    updateBreadcrumb();
+
+    // Wire tank card clicks via event listeners — more reliable than onclick
+    // attributes for data that may contain special characters.
+    el.querySelectorAll('.card[data-tankid] .card-body').forEach(body => {
+      const id = body.closest('[data-tankid]').dataset.tankid;
+      body.style.cursor = 'pointer';
+      body.addEventListener('click', () => selectTank(id));
+    });
+    el.querySelectorAll('[data-edit-tank]').forEach(btn => {
+      const id  = btn.dataset.editTank;
+      const t   = window._tankCache[id];
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        openEditTank(id, t.name, t.temperature||'', t.notes||'');
+      });
+    });
+    el.querySelectorAll('[data-del-tank]').forEach(btn => {
+      const id = btn.dataset.delTank;
+      const t  = window._tankCache[id];
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        confirmDeleteTank(id, t.name);
+      });
+    });
+  }catch(e){toast(e.message,'err');el.innerHTML=`<div class="empty-state">Error: ${escHtml(e.message)}</div>`;}
+  finally{hideLoading();}
+}
+
+function selectTank(id){
+  // Look up the full tank object from the cache populated by renderTankList
+  curTank = window._tankCache && window._tankCache[id] ? window._tankCache[id] : { id, name: id };
+  document.getElementById('hdr-tank').textContent = curTank.name;
+  goHome();
+}
+
+// Tank CRUD
+function openAddTank(){
+  openModal(`<h2>Add Tank</h2>
+    <div class="form-group"><label class="form-label">Tank Name *</label><input class="form-input" id="f-tname" placeholder="e.g. LN2-ALPHA"/></div>
+    <div class="form-group"><label class="form-label">Temperature</label><input class="form-input" id="f-ttemp" value="-196 °C"/></div>
+    <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="f-tnotes"></textarea></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">CANCEL</button><button class="btn btn-success" onclick="saveTank()">SAVE</button></div>`);
+}
+function openEditTank(id,name,temp,notes){
+  openModal(`<h2>Edit Tank</h2>
+    <div class="form-group"><label class="form-label">Tank Name *</label><input class="form-input" id="f-tname" value="${escHtml(name)}"/></div>
+    <div class="form-group"><label class="form-label">Temperature</label><input class="form-input" id="f-ttemp" value="${escHtml(temp)}"/></div>
+    <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="f-tnotes">${escHtml(notes)}</textarea></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">CANCEL</button><button class="btn btn-success" onclick="updateTank('${id}')">SAVE</button></div>`);
+}
+async function saveTank(){
+  const name=document.getElementById('f-tname').value.trim();
+  if(!name){toast('Tank name required','err');return;}
+  try{
+    await api('POST','/tanks',{name,temperature:document.getElementById('f-ttemp').value.trim(),notes:document.getElementById('f-tnotes').value.trim()});
+    closeModal();toast('Tank created');await renderTankList();
+  }catch(e){toast(e.message,'err');}
+}
+async function updateTank(id){
+  const name=document.getElementById('f-tname').value.trim();
+  if(!name){toast('Tank name required','err');return;}
+  try{
+    await api('PUT',`/tanks/${id}`,{name,temperature:document.getElementById('f-ttemp').value.trim(),notes:document.getElementById('f-tnotes').value.trim()});
+    closeModal();toast('Tank updated');
+    // Update name in header if this is the current tank
+    if(curTank&&curTank.id===id){curTank.name=name;document.getElementById('hdr-tank').textContent=name;updateBreadcrumb();}
+    if(view==='tanks') await renderTankList();
+  }catch(e){toast(e.message,'err');}
+}
+function confirmDeleteTank(id,name){
+  confirmDialog('Delete Tank',`Delete "<strong>${escHtml(name)}</strong>"?<br>Tank must have no racks.`,async()=>{
+    try{await api('DELETE',`/tanks/${id}`);toast('Tank deleted');await renderTankList();}
+    catch(e){toast(e.message,'err');}
+  });
+}
+
+// ── HOME (rack list for selected tank) ────────────────────────────────────────
+async function renderHome(){
+  showLoading();const el=document.getElementById('main-content');
+  try{
+    const racks=await api('GET',`/tanks/${curTank.id}/racks`);
+    let h=`<div class="section-header">
+      <div class="section-left"><div class="section-title">Racks</div><div class="section-sub">${racks.length} rack(s) in ${escHtml(curTank.name)}</div></div>
+      <div class="section-right">
+        <button class="btn btn-qr" onclick="openVialQRScan()">▦ SCAN VIAL QR</button>
+        <button class="btn btn-success" onclick="openAddRack()">＋ ADD RACK</button>
+      </div>
+    </div>`;
+    if(!racks.length){h+=`<div class="empty-state">No racks yet.</div>`;}
+    else{h+=`<div class="card-grid">`;
+      for(const rack of racks){
+        const boxes=await api('GET',`/racks/${rack.id}/boxes`).catch(()=>[]);
+        const occupied=boxes.length,p=rack.capacity?Math.round(occupied/rack.capacity*100):0,cl=fillCls(p);
+        h+=`<div class="card"><div class="card-accent"></div><div class="card-body" onclick="goRack('${rack.id}')"><div class="card-label"><span>RACK · ${rack.id.slice(0,8)}</span></div><div class="card-title">${escHtml(rack.name)}</div><div class="card-meta">Capacity: <span class="val">${rack.capacity} slots</span><br>Boxes: <span class="val">${occupied}/${rack.capacity}</span> ${badgeHtml(p)}<br>Position: <span class="val">${escHtml(rack.position||'—')}</span></div><div class="fill-bar"><div class="fill-bar-inner ${cl}" style="width:${p}%"></div></div></div><div class="card-actions"><button class="ca" onclick="event.stopPropagation();openAddBox('${rack.id}',${rack.capacity})">＋ BOX</button><button class="ca" onclick="event.stopPropagation();openEditRack('${rack.id}','${escHtml(rack.name)}','${escHtml(rack.position||'')}',${rack.capacity},'${escHtml(rack.notes||'')}')">✎ EDIT</button><button class="ca del" onclick="event.stopPropagation();confirmDeleteRack('${rack.id}','${escHtml(rack.name)}')">✕ DEL</button></div></div>`;
+      }
+      h+=`</div>`;}
+    el.innerHTML=h;refreshStats();
+  }catch(e){toast(e.message,'err');el.innerHTML=`<div class="empty-state">Error: ${escHtml(e.message)}</div>`;}
+  finally{hideLoading();}
+}
+
+// ── RACK VIEW ─────────────────────────────────────────────────────────────────
+async function renderRack(){
+  showLoading();const el=document.getElementById('main-content');
+  try{
+    const{rack,slots}=await api('GET',`/racks/${curRack.id}/slots`);curRack=rack;
+    const occupied=slots.filter(s=>s.occupied).length,p=rack.capacity?Math.round(occupied/rack.capacity*100):0;
+    let h=`<div class="section-header"><div class="section-left"><div class="section-title">${escHtml(rack.name)}</div><div class="section-sub">RACK · ${escHtml(rack.position||'—')} · ${rack.capacity} slots · ${occupied} occupied · ${p}% full</div></div><div class="section-right"><button class="btn btn-success" onclick="openAddBox('${rack.id}',${rack.capacity})">＋ PLACE BOX</button><button class="btn" onclick="openEditRack('${rack.id}','${escHtml(rack.name)}','${escHtml(rack.position||'')}',${rack.capacity},'${escHtml(rack.notes||'')}')">✎ EDIT RACK</button><button class="btn btn-danger" onclick="confirmDeleteRack('${rack.id}','${escHtml(rack.name)}')">✕ DELETE RACK</button></div></div><div class="rack-legend"><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--accent2)"></div>Occupied</div><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--surface2);border:1px dashed var(--border)"></div>Empty</div><span style="margin-left:auto;color:var(--muted)">↑ slot 1 = top of rack</span></div><div class="rack-top-label">▲ TOP OF RACK</div><div class="rack-column">`;
+    for(const slot of slots){
+      if(slot.occupied){
+        const b=slot.box,cap=b.rows*b.cols,vc=b.vial_count||0,bp=cap?Math.round(vc/cap*100):0,bcl=fillCls(bp);
+        const qrInd=b.qr_code?`<span class="qr-badge" title="${escHtml(b.qr_code)}">▦ QR</span>`:'';
+        h+=`<div class="slot-row occupied" onclick="goBox('${rack.id}','${b.id}')"><div class="slot-num">${slot.slot_position}</div><div class="slot-content"><div><div class="slot-box-name">${escHtml(b.name)} ${qrInd}</div><div class="slot-box-meta">Grid: <span class="val">${boxSzLbl(b)}</span> &nbsp; Vials: <span class="val">${vc}/${cap}</span></div></div><div class="slot-fill-wrap"><div class="slot-fill-label">${bp}%</div><div class="slot-fill-bar"><div class="slot-fill-inner ${bcl}" style="width:${bp}%"></div></div></div><div class="slot-actions" onclick="event.stopPropagation()">${b.qr_code?`<button class="btn btn-sm btn-qr" onclick="showQRModal('${escHtml(b.qr_code)}','${escHtml(b.name)}')">▦ QR</button>`:''}<button class="btn btn-sm" onclick="openEditBox('${rack.id}','${b.id}','${escHtml(b.name)}',${slot.slot_position},${b.rows},${b.cols},'${escHtml(b.qr_code||'')}','${escHtml(b.notes||'')}',${rack.capacity})">✎</button><button class="btn btn-sm btn-move" onclick="openMoveBox('${b.id}','${escHtml(b.name)}',${slot.slot_position})">↦</button><button class="btn btn-sm btn-danger" onclick="confirmDeleteBox('${b.id}','${escHtml(b.name)}',${slot.slot_position})">✕</button></div></div></div>`;
+      }else{
+        h+=`<div class="slot-row empty"><div class="slot-num">${slot.slot_position}</div><div class="slot-content"><span class="slot-empty-label">— EMPTY —</span><div class="slot-actions"><button class="btn btn-sm btn-success" onclick="openAddBoxAtSlot('${rack.id}',${rack.capacity},${slot.slot_position})">＋ PLACE</button></div></div></div>`;
+      }
+    }
+    h+=`</div><div class="rack-bottom-label">▼ BOTTOM OF RACK</div>`;
+    el.innerHTML=h;
+  }catch(e){toast(e.message,'err');el.innerHTML=`<div class="empty-state">Error: ${escHtml(e.message)}</div>`;}
+  finally{hideLoading();}
+}
+
+// ── BOX VIEW ──────────────────────────────────────────────────────────────────
+function renderBox(){
+  const box=curBox,vials=box._vials||[],rows=box.rows,cols=box.cols,cap=rows*cols,used=vials.length,p=Math.round(used/cap*100);
+  const el=document.getElementById('main-content'),vialMap={};
+  for(const v of vials) vialMap[`${v.row_index},${v.col_index}`]=v;
+  const hl=highlightVial;highlightVial=null;
+  let colHtml=`<div class="col-labels-row"><div class="col-label-spacer"></div><div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:4px;flex:1">`;
+  for(let c=0;c<cols;c++) colHtml+=`<div class="col-label">${colLbl(c)}</div>`;
+  colHtml+=`</div></div>`;
+  let rowsHtml='';
+  for(let r=0;r<rows;r++){
+    rowsHtml+=`<div class="row-wrap"><div class="row-label">${rowLbl(r)}</div><div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:4px;flex:1">`;
+    for(let c=0;c<cols;c++){
+      const v=vialMap[`${r},${c}`],isSel=selVial&&selVial.r===r&&selVial.c===c,isHL=hl&&hl.r===r&&hl.c===c;
+      const cls=['vial',v?'occupied':'',isSel?'selected':'',v?.qr_code?'has-qr':'',isHL?'highlighted':''].filter(Boolean).join(' ');
+      rowsHtml+=`<div class="${cls}" id="vial-${r}-${c}" onclick="selectVial(${r},${c})" title="${v?escHtml(v.name):'Empty '+rowLbl(r)+colLbl(c)}">${v?'●':''}</div>`;
+    }
+    rowsHtml+=`</div></div>`;
+  }
+  let panelHtml='';
+  if(selVial!==null){
+    const v=vialMap[`${selVial.r},${selVial.c}`],pos=`${rowLbl(selVial.r)}${colLbl(selVial.c)}`;
+    if(v){panelHtml=`<h3>VIAL ${pos}</h3><div class="info-field"><div class="info-label">Sample</div><div class="info-value">${escHtml(v.name)}</div></div>${v.sample_type?`<div class="info-field"><div class="info-label">Type</div><div class="info-value"><span class="tag">${escHtml(v.sample_type)}</span></div></div>`:''}<div class="info-field"><div class="info-label">Stored</div><div class="info-value">${fmtDate(v.date_stored)}</div></div>${v.volume?`<div class="info-field"><div class="info-label">Volume</div><div class="info-value">${escHtml(v.volume)}</div></div>`:''}${v.concentration?`<div class="info-field"><div class="info-label">Cell No.</div><div class="info-value">${escHtml(v.concentration)}</div></div>`:''}${v.passage?`<div class="info-field"><div class="info-label">Passage</div><div class="info-value">${escHtml(v.passage)}</div></div>`:''}${v.researcher?`<div class="info-field"><div class="info-label">Researcher</div><div class="info-value">${escHtml(v.researcher)}</div></div>`:''}${v.qr_code?`<div class="info-field"><div class="info-label">QR Code</div><div class="info-value" style="color:var(--purple);font-size:10px">${escHtml(v.qr_code)}</div></div>`:''}${v.notes?`<div class="info-field"><div class="info-label">Notes</div><div class="info-value" style="font-size:10px;color:var(--muted)">${escHtml(v.notes)}</div></div>`:''}<div class="info-actions">${v.qr_code?`<button class="btn btn-sm btn-qr" onclick="showQRModal('${escHtml(v.qr_code)}','${pos}')">▦ VIEW QR</button>`:''}<button class="btn btn-sm btn-success" onclick="openEditVial(${selVial.r},${selVial.c})">✎ EDIT</button><button class="btn btn-sm btn-move" onclick="openMoveVial(${selVial.r},${selVial.c})">↦ MOVE</button><button class="btn btn-sm btn-danger" onclick="confirmRemoveVial(${selVial.r},${selVial.c})">✕ REMOVE</button></div>`;}
+    else{panelHtml=`<h3>EMPTY ${pos}</h3><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:14px">Position available.</div><div class="info-actions"><button class="btn btn-sm btn-success" onclick="openAddVial(${selVial.r},${selVial.c})">＋ ADD SAMPLE</button><button class="btn btn-sm" onclick="openBulkAdd()" title="Add same sample to multiple positions">＋ BULK ADD</button></div>`;}
+  }else{panelHtml=`<h3>SELECT VIAL</h3><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">Click a cell to view or modify.</div>`;}
+  el.innerHTML=`<div class="section-header"><div class="section-left"><div class="section-title">${escHtml(box.name)}</div><div class="section-sub">${box.slot_position?`Slot ${box.slot_position} · `:''}${boxSzLbl(box)} · ${used}/${cap} vials (${p}%)</div></div><div class="section-right">${box.qr_code?`<button class="btn btn-qr" onclick="showQRModal('${escHtml(box.qr_code)}','${escHtml(box.name)}')">▦ BOX QR</button>`:''}<button class="btn" onclick="openEditBox('${curRack.id}','${box.id}','${escHtml(box.name)}',${box.slot_position},${box.rows},${box.cols},'${escHtml(box.qr_code||'')}','${escHtml(box.notes||'')}',${curRack.capacity})">✎ EDIT BOX</button><button class="btn btn-move" onclick="openMoveBox('${box.id}','${escHtml(box.name)}',${box.slot_position})">↦ MOVE BOX</button><button class="btn btn-success" onclick="openBulkAdd()">＋ BULK ADD</button><button class="btn btn-danger" onclick="confirmDeleteBox('${box.id}','${escHtml(box.name)}',${box.slot_position})">✕ DELETE BOX</button></div></div><div class="legend"><div class="legend-item"><div class="legend-box" style="background:rgba(0,120,180,.25);border-color:var(--accent2)"></div>Occupied</div><div class="legend-item"><div class="legend-box" style="background:var(--surface);border-color:var(--border)"></div>Empty</div><div class="legend-item"><div class="legend-box" style="background:rgba(0,200,255,.2);border-color:var(--accent)"></div>Selected</div><div class="legend-item"><div class="legend-box" style="background:rgba(255,149,0,.2);border-color:var(--warn)"></div>Search match</div><div class="legend-item" style="color:var(--purple)">▦ = QR linked</div></div><div class="box-view"><div class="vial-grid-wrap">${colHtml}${rowsHtml}</div><div class="info-panel">${panelHtml}</div></div>`;
+  if(hl) requestAnimationFrame(()=>{ const e=document.getElementById(`vial-${hl.r}-${hl.c}`); if(e) e.scrollIntoView({behavior:'smooth',block:'center'}); });
+}
+function selectVial(r,c){selVial={r,c};renderBox();}
+
+// =============================================================================
+// SETTINGS VIEW RENDERER
+// =============================================================================
+function renderSettings(){
+  const s = settings;
+  const el = document.getElementById('main-content');
+
+  // ── Colour scheme swatches ────────────────────────────────────────────────
+  const swatchesHtml = THEMES.map(t => {
+    const [bg,ac,a2,dg] = t.colors;
+    return `<div class="swatch ${s.theme===t.key?'active':''}" onclick="setSetting('theme','${t.key}')">
+      <div class="swatch-preview" style="background:${bg}">
+        <span style="background:${ac}"></span>
+        <span style="background:${a2}"></span>
+        <span style="background:${dg}"></span>
+      </div>
+      <div class="swatch-label">${t.label}</div>
+    </div>`;
+  }).join('');
+
+  // ── Font pair cards ───────────────────────────────────────────────────────
+  const fontsHtml = FONT_PAIRS.map(fp => {
+    const active = s.fontMono === fp.mono;
+    return `<div class="font-card ${active?'active':''}" onclick="setFontPair('${fp.mono}','${fp.sans}')">
+      <div class="font-card-name" style="font-family:'${fp.sans}',sans-serif">${fp.label}</div>
+      <div class="font-card-sample" style="font-family:'${fp.mono}',monospace">${fp.sample}</div>
+    </div>`;
+  }).join('');
+
+  // ── Radius buttons ────────────────────────────────────────────────────────
+  const radii = [
+    { val:0, label:'Sharp' },
+    { val:4, label:'Soft' },
+    { val:8, label:'Round' },
+  ];
+  const radiusHtml = radii.map(r =>
+    `<button class="radius-btn ${s.radius===r.val?'active':''}" onclick="setSetting('radius',${r.val})" title="${r.label}">
+      <div class="r-demo" style="border-radius:${r.val}px"></div>
+    </button>`
+  ).join('');
+
+  // ── Density buttons ───────────────────────────────────────────────────────
+  const densities = ['compact','normal','comfortable'];
+  const densityHtml = densities.map(d =>
+    `<button class="density-btn ${s.density===d?'active':''}" onclick="setSetting('density','${d}')">${d}</button>`
+  ).join('');
+
+  // ── Live preview ──────────────────────────────────────────────────────────
+  const previewHtml = `
+    <div class="settings-preview">
+      <div class="settings-preview-title">Live Preview</div>
+      <div style="font-family:var(--font-sans);font-size:var(--font-size-base);font-weight:700;color:var(--text);margin-bottom:6px">
+        HEK293-GFP-P12 &nbsp; <span style="font-family:var(--font-mono);font-size:var(--font-size-sm);color:var(--muted)">Position B04</span>
+      </div>
+      <div style="font-family:var(--font-mono);font-size:var(--font-size-sm);color:var(--muted);margin-bottom:10px;line-height:1.8">
+        RACK-01 › Slot 3 › BOX-007 · 500 µL · 1×10⁶ cells/mL
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="preview-chip" style="border-color:var(--accent);color:var(--accent)">Cell Line</span>
+        <span class="preview-chip" style="border-color:var(--success);color:var(--success)">OK</span>
+        <span class="preview-chip" style="border-color:var(--warn);color:var(--warn)">HIGH</span>
+        <span class="preview-chip" style="border-color:var(--danger);color:var(--danger)">FULL</span>
+        <span class="preview-chip" style="border-color:var(--purple);color:var(--purple)">▦ QR</span>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:6px">
+        <button class="btn btn-sm">ACTION</button>
+        <button class="btn btn-sm btn-success">＋ ADD</button>
+        <button class="btn btn-sm btn-danger">✕ DEL</button>
+      </div>
+    </div>`;
+
+  el.innerHTML = `
+    <div class="settings-view">
+      <div class="section-header">
+        <div class="section-left">
+          <div class="section-title">Appearance</div>
+          <div class="section-sub">Customise fonts, colours, and layout density</div>
+        </div>
+        <div class="section-right">
+          <button class="btn" onclick="resetSettings()">↺ RESET DEFAULTS</button>
+        </div>
+      </div>
+
+      <!-- COLOUR SCHEME -->
+      <div class="settings-section">
+        <div class="settings-section-title">Colour Scheme</div>
+        <div class="swatch-grid">${swatchesHtml}</div>
+      </div>
+
+      <!-- FONT PAIR -->
+      <div class="settings-section">
+        <div class="settings-section-title">Font Pair</div>
+        <div class="font-grid">${fontsHtml}</div>
+      </div>
+
+      <!-- FONT SIZE -->
+      <div class="settings-section">
+        <div class="settings-section-title">Font Size</div>
+        <div class="settings-slider-row">
+          <span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">12px</span>
+          <input
+            class="settings-slider" type="range"
+            min="12" max="20" step="1"
+            value="${s.fontSize}"
+            oninput="setSetting('fontSize',parseInt(this.value));document.getElementById('font-size-val').textContent=this.value+'px'"
+          />
+          <span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">20px</span>
+          <span class="slider-value" id="font-size-val">${s.fontSize}px</span>
+        </div>
+      </div>
+
+      <!-- DENSITY -->
+      <div class="settings-section">
+        <div class="settings-section-title">UI Density</div>
+        <div class="density-options">${densityHtml}</div>
+        <div class="form-hint" style="margin-top:8px">Controls spacing between elements and slot row height.</div>
+      </div>
+
+      <!-- CORNER RADIUS -->
+      <div class="settings-section">
+        <div class="settings-section-title">Corner Radius</div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <div class="radius-options">${radiusHtml}</div>
+          <span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">${radii.find(r=>r.val===s.radius)?.label||''}</span>
+        </div>
+      </div>
+
+      <!-- TOGGLES -->
+      <div class="settings-section">
+        <div class="settings-section-title">Options</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">CRT Scanline Overlay</div>
+            <div class="toggle-sub">Subtle horizontal lines for retro terminal feel</div>
+          </div>
+          <div class="toggle-switch ${s.scanlines?'on':''}" onclick="setSetting('scanlines',!settings.scanlines);this.classList.toggle('on')"></div>
+        </div>
+      </div>
+
+      ${previewHtml}
+
+    </div>`;
+}
+
+// ── Settings mutators ─────────────────────────────────────────────────────────
+function setSetting(key, value){
+  settings[key] = value;
+  saveSettings(settings);
+  applySettings(settings);
+  if(view === 'settings') renderSettings();
+}
+
+function setFontPair(mono, sans){
+  settings.fontMono = mono;
+  settings.fontSans = sans;
+  saveSettings(settings);
+  applySettings(settings);
+  if(view === 'settings') renderSettings();
+}
+
+function resetSettings(){
+  settings = { ...DEFAULTS };
+  saveSettings(settings);
+  applySettings(settings);
+  if(view === 'settings') renderSettings();
+  toast('Settings reset to defaults');
+}
+
+
+// ── SEARCH ────────────────────────────────────────────────────────────────────
+document.getElementById('global-search').addEventListener('input', e => {
+  const q=e.target.value.trim();clearTimeout(searchDebounce);
+  const countEl=document.getElementById('search-count');
+  if(q.length===0){countEl.style.display='none';if(view==='search'){curTank?goHome():goTankList();}return;}
+  if(q.length===1){countEl.textContent='2+ chars';countEl.style.display='block';return;}
+  searchDebounce=setTimeout(()=>{runSearch(q);},300);
+});
+document.getElementById('global-search').addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.target.value='';document.getElementById('search-count').style.display='none';if(view==='search'){curTank?goHome():goTankList();}}
+});
+
+async function runSearch(q){
+  searchTerm=q;view='search';updateBreadcrumb();showLoading();
+  try{const data=await api('GET',`/search?q=${encodeURIComponent(q)}&limit=100`);searchResults=data;renderSearch();const countEl=document.getElementById('search-count');countEl.textContent=data.total;countEl.style.display=data.total?'block':'none';}
+  catch(e){toast(e.message,'err');document.getElementById('main-content').innerHTML=`<div class="empty-state">Search error: ${escHtml(e.message)}</div>`;}
+  finally{hideLoading();}
+}
+function renderSearch(){
+  const data=searchResults;if(!data) return;
+  const{query,results}=data;const rCount=results.racks.length,bCount=results.boxes.length,vCount=results.vials.length,total=rCount+bCount+vCount;
+  const showRacks=searchFilter==='all'||searchFilter==='rack',showBoxes=searchFilter==='all'||searchFilter==='box',showVials=searchFilter==='all'||searchFilter==='vial';
+  const el=document.getElementById('main-content');
+  if(total===0){el.innerHTML=`<div class="search-header"><div class="search-title">Search Results</div><div class="search-sub">0 results for "${escHtml(query)}"</div></div><div class="search-empty"><div>No matches for <span class="search-empty-term">"${escHtml(query)}"</span></div><div class="search-empty-hint">Try a different term, or search by QR code, researcher, or sample type.</div></div>`;return;}
+  const pills=[{key:'all',label:'All',count:total},{key:'rack',label:'Racks',count:rCount},{key:'box',label:'Boxes',count:bCount},{key:'vial',label:'Vials',count:vCount}].map(p=>p.count>0?`<button class="filter-pill ${searchFilter===p.key?'active':''}" onclick="setSearchFilter('${p.key}')">${p.label}<span class="pill-count">${p.count}</span></button>`:'').join('');
+  let html=`<div class="search-header"><div class="search-title">Search Results</div><div class="search-sub">${total} result${total!==1?'s':''} for "${escHtml(query)}"</div></div><div class="search-filters">${pills}</div>`;
+  if(showRacks&&rCount>0){html+=`<div class="results-section"><div class="results-section-title">Racks <span class="count-badge rack-count-badge">${rCount}</span></div>`;for(const rack of results.racks){const fl=FIELD_LABELS[rack._match_field]||rack._match_field;html+=`<div class="result-card" onclick="goRack('${rack.id}')"><div class="result-icon rack">RK</div><div class="result-body"><div class="result-name">${highlight(rack.name,query)}</div><div class="result-path">📍 ${escHtml(rack.position||'—')}</div><div class="result-match">matched ${fl}: ${highlight(rack[rack._match_field],query)}</div></div><div class="result-meta"><span class="tag">${rack.capacity} slots</span><span class="result-arrow">›</span></div></div>`;}html+=`</div>`;}
+  if(showBoxes&&bCount>0){html+=`<div class="results-section"><div class="results-section-title">Boxes <span class="count-badge box-count-badge">${bCount}</span></div>`;for(const box of results.boxes){const fl=FIELD_LABELS[box._match_field]||box._match_field;html+=`<div class="result-card" onclick="goBox('${box.rack_id}','${box.id}')"><div class="result-icon box">BX</div><div class="result-body"><div class="result-name">${highlight(box.name,query)}</div><div class="result-path">📍 ${escHtml(box._path)}</div><div class="result-match">matched ${fl}: ${highlight(box[box._match_field],query)}</div></div><div class="result-meta"><span class="tag">${boxSzLbl(box)}</span>${box.qr_code?`<span class="qr-badge">▦ QR</span>`:''}<span class="result-arrow">›</span></div></div>`;}html+=`</div>`;}
+  if(showVials&&vCount>0){html+=`<div class="results-section"><div class="results-section-title">Vials <span class="count-badge vial-count-badge">${vCount}</span></div>`;for(const vial of results.vials){const fl=FIELD_LABELS[vial._match_field]||vial._match_field;html+=`<div class="result-card" onclick="goBoxHighlight('${vial._rack.id}','${vial.box_id}',${vial.row_index},${vial.col_index})"><div class="result-icon vial">${escHtml(vial.position_label)}</div><div class="result-body"><div class="result-name">${highlight(vial.name,query)}</div><div class="result-path">📍 ${escHtml(vial._path)}</div><div class="result-match">matched ${fl}: ${highlight(vial[vial._match_field],query)}</div></div><div class="result-meta">${vial.sample_type?`<span class="tag">${escHtml(vial.sample_type)}</span>`:''}${vial.qr_code?`<span class="qr-badge">▦ QR</span>`:''}<span class="result-arrow">›</span></div></div>`;}html+=`</div>`;}
+  el.innerHTML=html;
+}
+function setSearchFilter(f){searchFilter=f;renderSearch();}
+
+// ── HISTORY ───────────────────────────────────────────────────────────────────
+async function renderHistory(){
+  showLoading();const el=document.getElementById('main-content');
+  try{
+    const params=new URLSearchParams({page:historyPage,limit:50,...historyFilter});
+    const{entries,total,pages}=await api('GET',`/history?${params}`);
+    const ac={create:'action-create',update:'action-update',delete:'action-delete'};
+    const rows=entries.map(e=>{let diff='';if(e.action==='update'&&e.old_data&&e.new_data){const ch=[];for(const k of Object.keys(e.new_data)){if(k==='updated_at') continue;if(JSON.stringify(e.old_data[k])!==JSON.stringify(e.new_data[k])) ch.push(`<span class="diff-old">${escHtml(k)}: ${escHtml(String(e.old_data[k]??'—'))}</span> <span class="diff-new">→ ${escHtml(String(e.new_data[k]??'—'))}</span>`);}diff=ch.slice(0,3).join('<br>');}return `<tr><td style="white-space:nowrap">${fmtTs(e.timestamp)}</td><td><span class="action-badge ${ac[e.action]||''}">${e.action}</span></td><td><span class="tag">${e.entity_type}</span></td><td>${escHtml(e.entity_name)}</td><td>${escHtml(e.changed_by||'—')}</td><td>${diff}</td></tr>`;}).join('');
+    el.innerHTML=`<div class="section-header"><div class="section-left"><div class="section-title">Change History</div><div class="section-sub">${total} total audit entries</div></div><div class="section-right"><a href="/api/export/history" target="_blank"><button class="btn btn-warn">↓ EXPORT LOG</button></a></div></div><div class="history-filters"><select class="form-select" style="width:130px" id="hf-type" onchange="applyHistoryFilter()"><option value="">All Types</option><option value="rack">Rack</option><option value="box">Box</option><option value="vial">Vial</option></select><select class="form-select" style="width:130px" id="hf-action" onchange="applyHistoryFilter()"><option value="">All Actions</option><option value="create">Create</option><option value="update">Update</option><option value="delete">Delete</option></select><input class="form-input" style="width:200px" id="hf-search" placeholder="Name / researcher…" oninput="applyHistoryFilter()"/></div>${entries.length?`<div style="overflow-x:auto"><table class="history-table"><thead><tr><th>TIMESTAMP</th><th>ACTION</th><th>TYPE</th><th>NAME</th><th>BY</th><th>CHANGES</th></tr></thead><tbody>${rows}</tbody></table></div><div class="pagination">${historyPage>1?`<button class="btn btn-sm" onclick="historyPage--;renderHistory()">‹ PREV</button>`:''}<span>Page ${historyPage} of ${pages}</span>${historyPage<pages?`<button class="btn btn-sm" onclick="historyPage++;renderHistory()">NEXT ›</button>`:''}</div>`:'<div class="empty-state">No history yet.</div>'}`;
+    document.getElementById('hf-type').value=historyFilter.entity_type;document.getElementById('hf-action').value=historyFilter.action;document.getElementById('hf-search').value=historyFilter.search;
+  }catch(e){toast(e.message,'err');}finally{hideLoading();}
+}
+function applyHistoryFilter(){historyFilter.entity_type=document.getElementById('hf-type').value;historyFilter.action=document.getElementById('hf-action').value;historyFilter.search=document.getElementById('hf-search').value;historyPage=1;renderHistory();}
+
+// ── MODALS ────────────────────────────────────────────────────────────────────
+function openModal(html){document.getElementById('modal-body').innerHTML=html;document.getElementById('modal').style.display='flex';}
+function closeModal(){document.getElementById('modal').style.display='none';}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target===document.getElementById('modal')) closeModal();});
+function confirmDialog(title,msg,cb){openModal(`<div class="confirm-box"><h2>⚠ ${title}</h2><p>${msg}</p><div class="modal-actions"><button class="btn" onclick="closeModal()">CANCEL</button><button class="btn btn-danger" id="confirm-ok">CONFIRM</button></div></div>`);document.getElementById('confirm-ok').onclick=()=>{closeModal();cb();};}
+
+// ── QR ────────────────────────────────────────────────────────────────────────
+function showQRModal(v,l){
+  // QR image generated server-side at /api/qr — no browser library needed
+  const src = `/api/qr?text=${encodeURIComponent(v)}`;
+  openModal(`<h2>▦ QR — ${escHtml(l)}</h2>
+    <div class="qr-display-wrap">
+      <img src="${src}" width="200" height="200"
+           style="display:block;margin:0 auto;border-radius:4px;background:#fff;padding:8px"
+           alt="QR code"
+           onerror="this.style.display='none';document.getElementById('qr-err').style.display='block'"/>
+      <div id="qr-err" style="display:none;font-family:var(--font-mono);font-size:11px;color:var(--danger);margin-top:8px">
+        Failed to generate QR image
+      </div>
+      <div class="qr-value">${escHtml(v)}</div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">CLOSE</button></div>`);
+}
+function qrFieldHtml(fId,val){return `<div class="form-group"><label class="form-label">QR Code</label><div class="scan-row"><input class="form-input" id="${fId}" value="${escHtml(val||'')}" placeholder="Scan or type QR value…"/><button class="btn btn-qr" type="button" onclick="openQRScanner('${fId}')">▦ SCAN</button></div><div id="${fId}-hint" class="qr-hint">${val?'Stored: '+escHtml(val):''}</div></div>`;}
+function openQRScanner(tId){
+  scanTargetId=tId;
+  document.getElementById('qr-manual').value='';
+  document.getElementById('scan-status').className='';
+  document.getElementById('scan-status').textContent='Accessing camera…';
+  document.getElementById('scanner-overlay').style.display='flex';
+
+  const constraints = {
+    video: {
+      facingMode: { ideal: 'environment' },
+      width:  { ideal: 640 },
+      height: { ideal: 480 },
+    }
+  };
+
+  navigator.mediaDevices.getUserMedia(constraints)
+    .then(s => {
+      scanStream = s;
+      const v = document.getElementById('qr-video');
+      v.srcObject = s;
+      v.addEventListener('canplay', function onReady(){
+        v.removeEventListener('canplay', onReady);
+        v.play().catch(()=>{});
+        const st = document.getElementById('scan-status');
+        if(st){ st.textContent = 'Hold QR code steady in view…'; st.className = 'detecting'; }
+        scanRAF = requestAnimationFrame(scanFrame);
+      }, { once: true });
+      setTimeout(() => {
+        if(scanStream && v.videoWidth === 0){ v.play().catch(()=>{}); scanRAF = requestAnimationFrame(scanFrame); }
+      }, 3000);
+    })
+    .catch(err => {
+      const msg = err.name === 'NotAllowedError' ? 'Camera permission denied.' : 'Camera unavailable — use manual entry.';
+      document.getElementById('scan-status').textContent = msg;
+    });
+}
+
+let _scanCanvas = null, _scanLast = 0;
+function getScanCanvas(){ if(!_scanCanvas) _scanCanvas = document.createElement('canvas'); return _scanCanvas; }
+
+async function scanFrame(){
+  if(!scanStream) return;
+  const v = document.getElementById('qr-video');
+  if(!v || v.videoWidth === 0){ scanRAF = requestAnimationFrame(scanFrame); return; }
+
+  const now = performance.now();
+  if(now - _scanLast < 66){ scanRAF = requestAnimationFrame(scanFrame); return; }
+  _scanLast = now;
+
+  let detected = null;
+
+  // ZXing (multi-format)
+  if(!detected && _zxingReader){
+    const W = v.videoWidth, H = v.videoHeight;
+    const c = getScanCanvas();
+    for(const [sx,sy,sw,sh] of [[0,0,W,H],[W/4,H/4,W/2,H/2]]){
+      if(detected) break;
+      c.width = sw; c.height = sh;
+      const ctx = c.getContext('2d', { willReadFrequently:true });
+      ctx.drawImage(v, sx, sy, sw, sh, 0, 0, sw, sh);
+      detected = _zxingDecode(ctx.getImageData(0, 0, sw, sh));
+    }
+  }
+
+
+  if(detected){ applyQRResult(detected); return; }
+  scanRAF = requestAnimationFrame(scanFrame);
+}
+function applyQRResult(val){stopScanner();const f=document.getElementById(scanTargetId);if(f){f.value=val;f.focus();}const h=document.getElementById(scanTargetId+'-hint');if(h) h.textContent='✓ Captured: '+val.slice(0,50);}
+function stopScanner(){if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null;}if(scanRAF){cancelAnimationFrame(scanRAF);scanRAF=null;}document.getElementById('scanner-overlay').style.display='none';const v=document.getElementById('qr-video');if(v) v.srcObject=null;}
+function useManualQR(){const v=document.getElementById('qr-manual').value.trim();if(!v){alert('Enter a value.');return;}applyQRResult(v);}
+
+// ── RACK CRUD ─────────────────────────────────────────────────────────────────
+function openAddRack(){openModal(`<h2>Add Rack</h2><div class="form-row"><div class="form-group"><label class="form-label">Rack Name *</label><input class="form-input" id="f-rname" placeholder="e.g. RACK-01"/></div><div class="form-group"><label class="form-label">Capacity (slots) *</label><input class="form-input" id="f-rcap" type="number" min="1" max="100" placeholder="e.g. 10"/><div class="form-hint">Total physical box slots</div></div></div><div class="form-group"><label class="form-label">Position in Tank</label><input class="form-input" id="f-rpos" placeholder="e.g. Slot A"/></div><div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="f-rnotes"></textarea></div><div class="modal-actions"><button class="btn" onclick="closeModal()">CANCEL</button><button class="btn btn-success" onclick="saveRack()">SAVE</button></div>`);}
+function openEditRack(id,name,pos,cap,notes){openModal(`<h2>Edit Rack</h2><div class="form-row"><div class="form-group"><label class="form-label">Rack Name *</label><input class="form-input" id="f-rname" value="${escHtml(name)}"/></div><div class="form-group"><label class="form-label">Capacity (slots) *</label><input class="form-input" id="f-rcap" type="number" min="1" max="100" value="${cap}"/><div class="form-hint">Reducing requires moving boxes first</div></div></div><div class="form-group"><label class="form-label">Position in Tank</label><input class="form-input" id="f-rpos" value="${escHtml(pos)}"/></div><div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="f-rnotes">${escHtml(notes)}</textarea></div><div class="modal-actions"><button class="btn" onclick="closeModal()">CANCEL</button><button class="btn btn-success" onclick="updateRack('${id}')">SAVE</button></div>`);}
+async function saveRack(){const name=document.getElementById('f-rname').value.trim(),cap=parseInt(document.getElementById('f-rcap').value,10);if(!name){toast('Rack name required','err');return;}if(!cap||cap<1){toast('Capacity must be ≥ 1','err');return;}try{await api('POST',`/tanks/${curTank.id}/racks`,{name,capacity:cap,position:document.getElementById('f-rpos').value.trim(),notes:document.getElementById('f-rnotes').value.trim(),changedBy:getRes()});closeModal();toast('Rack created');await renderHome();}catch(e){toast(e.message,'err');}}
+async function updateRack(id){const name=document.getElementById('f-rname').value.trim(),cap=parseInt(document.getElementById('f-rcap').value,10);if(!name){toast('Rack name required','err');return;}try{await api('PUT',`/racks/${id}`,{name,capacity:cap,position:document.getElementById('f-rpos').value.trim(),notes:document.getElementById('f-rnotes').value.trim(),changedBy:getRes()});closeModal();toast('Rack updated');if(view==='home') await renderHome();else{curRack=await api('GET',`/racks/${id}`);updateBreadcrumb();await renderRack();}}catch(e){toast(e.message,'err');}}
+function confirmDeleteRack(id,name){
+  const arch=settings.archiveOnDelete;
+  confirmDialog(arch?'Archive Rack':'Delete Rack',
+    arch?`Archive "<strong>${escHtml(name)}</strong>" and its boxes? Recoverable from the Archive view.`
+        :`Permanently delete "<strong>${escHtml(name)}</strong>" and all its boxes?`,
+    async()=>{
+      try{
+        await api('DELETE',`/racks/${id}?changedBy=${encodeURIComponent(getRes())}${arch?'&archive=true':''}`);
+        toast(`Rack ${arch?'archived':'deleted'}`);await goHome();
+      }catch(e){toast(e.message,'err');}
+    });
+}
+
+// ── BOX CRUD ──────────────────────────────────────────────────────────────────
+function buildSlotOptions(capacity,freeSlots,currentSlot=null){let o='';for(let i=1;i<=capacity;i++){const isFree=freeSlots.includes(i)||i===currentSlot;o+=`<option value="${i}" ${i===currentSlot?'selected':''} ${!isFree?'disabled':''}>${isFree?`Slot ${i}`:`Slot ${i} — occupied`}</option>`;}return o;}
+function toggleFreeform(){document.getElementById('freeform-fields').style.display=document.getElementById('f-bsize').value==='freeform'?'block':'none';}
+function boxSizeFields(rows,cols){const isFree=rows!==cols,sel=isFree?'freeform':String(rows);return `<div class="form-group"><label class="form-label">Grid Format *</label><select class="form-select" id="f-bsize" onchange="toggleFreeform()"><option value="5" ${sel==='5'?'selected':''}>5 × 5</option><option value="9" ${sel==='9'?'selected':''}>9 × 9</option><option value="10" ${sel==='10'?'selected':''}>10 × 10</option><option value="freeform" ${sel==='freeform'?'selected':''}>Custom / Freeform</option></select></div><div id="freeform-fields" style="display:${sel==='freeform'?'block':'none'}"><div class="form-row"><div class="form-group"><label class="form-label">Rows</label><input class="form-input" id="f-brows" type="number" min="1" max="26" value="${rows}"/></div><div class="form-group"><label class="form-label">Cols</label><input class="form-input" id="f-bcols" type="number" min="1" max="30" value="${cols}"/></div></div></div>`;}
+function getBoxDims(){const s=document.getElementById('f-bsize').value;if(s==='freeform') return{rows:Math.max(1,Math.min(26,parseInt(document.getElementById('f-brows').value)||9)),cols:Math.max(1,Math.min(30,parseInt(document.getElementById('f-bcols').value)||9))};return{rows:parseInt(s),cols:parseInt(s)};}
+async function openAddBox(rId,capacity){const boxes=await api('GET',`/racks/${rId}/boxes`).catch(()=>[]);const occ=boxes.map(b=>b.slot_position);const free=[];for(let i=1;i<=capacity;i++) if(!occ.includes(i)) free.push(i);if(!free.length){toast('All slots occupied','err');return;}openModal(`<h2>Place Box in Rack</h2><div class="form-group"><label class="form-label">Box Name *</label><input class="form-input" id="f-bname" placeholder="e.g. BOX-001"/></div><div class="form-group"><label class="form-label">Slot Position *</label><select class="form-select" id="f-bslot">${buildSlotOptions(capacity,free)}</select><div class="form-hint">${free.length} of ${capacity} slots available</div></div>${boxSizeFields(9,9)}${qrFieldHtml('f-bqr','')}<div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="f-bnotes"></textarea></div><div class="modal-actions"><button class="btn" onclick="closeModal()">CANCEL</button><button class="btn btn-success" onclick="saveBox('${rId}')">SAVE</button></div>`);}
+async function openAddBoxAtSlot(rId,capacity,slotPos){const boxes=await api('GET',`/racks/${rId}/boxes`).catch(()=>[]);const occ=boxes.map(b=>b.slot_position);const free=[];for(let i=1;i<=capacity;i++) if(!occ.includes(i)) free.push(i);openModal(`<h2>Place Box — Slot ${slotPos}</h2><div class="form-group"><label class="form-label">Box Name *</label><input class="form-input" id="f-bname" placeholder="e.g. BOX-001"/></div><div class="form-group"><label class="form-label">Slot Position *</label><select class="form-select" id="f-bslot">${buildSlotOptions(capacity,free,slotPos)}</select></div>${boxSizeFields(9,9)}${qrFieldHtml('f-bqr','')}<div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="f-bnotes"></textarea></div><div class="modal-actions"><button class="btn" onclick="closeModal()">CANCEL</button><button class="btn btn-success" onclick="saveBox('${rId}')">SAVE</button></div>`);}
+async function openEditBox(rId,bId,name,slotPos,rows,cols,qrCode,notes,capacity){const boxes=await api('GET',`/racks/${rId}/boxes`).catch(()=>[]);const occ=boxes.filter(b=>b.id!==bId).map(b=>b.slot_position);const free=[];for(let i=1;i<=capacity;i++) if(!occ.includes(i)) free.push(i);openModal(`<h2>Edit Box</h2><div class="form-group"><label class="form-label">Box Name *</label><input class="form-input" id="f-bname" value="${escHtml(name)}"/></div><div class="form-group"><label class="form-label">Slot Position *</label><select class="form-select" id="f-bslot">${buildSlotOptions(capacity,free,slotPos)}</select><div class="form-hint">Current: slot ${slotPos}</div></div>${boxSizeFields(rows,cols)}${qrFieldHtml('f-bqr',qrCode)}<div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="f-bnotes">${escHtml(notes)}</textarea></div><div class="modal-actions"><button class="btn" onclick="closeModal()">CANCEL</button><button class="btn btn-success" onclick="updateBox('${rId}','${bId}')">SAVE</button></div>`);}
+async function saveBox(rId){const name=document.getElementById('f-bname').value.trim(),slot=parseInt(document.getElementById('f-bslot').value,10);if(!name){toast('Box name required','err');return;}const{rows,cols}=getBoxDims();try{await api('POST',`/racks/${rId}/boxes`,{name,slot_position:slot,rows,cols,qr_code:document.getElementById('f-bqr').value.trim()||null,notes:document.getElementById('f-bnotes').value.trim(),changedBy:getRes()});closeModal();toast(`Box placed at slot ${slot}`);if(view==='rack') await renderRack();else await renderHome();}catch(e){toast(e.message,'err');}}
+async function updateBox(rId,bId){const name=document.getElementById('f-bname').value.trim(),slot=parseInt(document.getElementById('f-bslot').value,10);if(!name){toast('Box name required','err');return;}const{rows,cols}=getBoxDims();try{const res=await api('PUT',`/boxes/${bId}`,{name,slot_position:slot,rows,cols,qr_code:document.getElementById('f-bqr').value.trim()||null,notes:document.getElementById('f-bnotes').value.trim(),changedBy:getRes()});closeModal();if(res.warning) toast(res.warning,'info');toast('Box updated');if(view==='box') await goBox(rId,bId);else await renderRack();}catch(e){toast(e.message,'err');}}
+function confirmDeleteBox(bId,name,slotPos){
+  const arch=settings.archiveOnDelete;
+  confirmDialog(arch?'Archive Box':'Delete Box',
+    arch?`Archive "<strong>${escHtml(name)}</strong>" from slot ${slotPos}? Recoverable from the Archive view.`
+        :`Permanently delete "<strong>${escHtml(name)}</strong>" from slot ${slotPos}? All vials will be lost.`,
+    async()=>{
+      try{
+        await api('DELETE',`/boxes/${bId}?changedBy=${encodeURIComponent(getRes())}${arch?'&archive=true':''}`);
+        toast(`Box ${arch?'archived':'deleted'}`);
+        if(view==='box') await goRack(curRack.id);else await renderRack();
+      }catch(e){toast(e.message,'err');}
+    });
+}
+
+// ── VIAL CRUD ─────────────────────────────────────────────────────────────────
+function vialForm(v){
+  return `<div class="form-group"><label class="form-label">Sample Name *</label><input class="form-input" id="f-vname" value="${escHtml(v?.name||'')}" placeholder="e.g. HEK293-GFP-P12"/></div>
+<div class="form-row">
+  <div class="form-group"><label class="form-label">Type</label><select class="form-select" id="f-vtype">${['','Cell Line','Bacteria','Virus','DNA','RNA','Protein','Serum','Tissue','Other'].map(t=>`<option value="${t}" ${v?.sample_type===t?'selected':''}>${t||'—'}</option>`).join('')}</select></div>
+  <div class="form-group"><label class="form-label">Date Stored</label><input class="form-input" id="f-vdate" type="date" value="${v?.date_stored||new Date().toISOString().slice(0,10)}"/></div>
+</div>
+<div class="form-row">
+  <div class="form-group"><label class="form-label">Volume</label><input class="form-input" id="f-vvol" value="${escHtml(v?.volume||'')}" placeholder="500 µL"/></div>
+  <div class="form-group"><label class="form-label">Cell Number</label><input class="form-input" id="f-vconc" value="${escHtml(v?.concentration||'')}" placeholder="1×10⁶"/></div>
+</div>
+<div class="form-row">
+  <div class="form-group"><label class="form-label">Passage</label><input class="form-input" id="f-vpassage" value="${escHtml(v?.passage||'')}" placeholder="e.g. P12"/></div>
+  <div class="form-group"><label class="form-label">Researcher</label><input class="form-input" id="f-vres" value="${escHtml(v?.researcher||getRes())}" placeholder="Name"/></div>
+</div>
+${qrFieldHtml('f-vqr',v?.qr_code||'')}
+<div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="f-vnotes">${escHtml(v?.notes||'')}</textarea></div>`;
+}
+function vialFromForm(){return{name:document.getElementById('f-vname').value.trim(),sample_type:document.getElementById('f-vtype').value,date_stored:document.getElementById('f-vdate').value,volume:document.getElementById('f-vvol').value.trim(),concentration:document.getElementById('f-vconc').value.trim(),passage:document.getElementById('f-vpassage')?.value.trim()||null,researcher:document.getElementById('f-vres').value.trim(),qr_code:document.getElementById('f-vqr').value.trim()||null,notes:document.getElementById('f-vnotes').value.trim(),changedBy:getRes()};}
+function openAddVial(r,c){const pos=`${rowLbl(r)}${colLbl(c)}`;openModal(`<h2>Add Sample — ${escHtml(curBox.name)} / ${pos}</h2>${vialForm(null)}<div class="modal-actions"><button class="btn" onclick="closeModal()">CANCEL</button><button class="btn btn-success" onclick="saveVial(${r},${c})">SAVE</button></div>`);}
+function openEditVial(r,c){const vMap={};for(const v of curBox._vials||[]) vMap[`${v.row_index},${v.col_index}`]=v;const v=vMap[`${r},${c}`],pos=`${rowLbl(r)}${colLbl(c)}`;openModal(`<h2>Edit Sample — ${escHtml(curBox.name)} / ${pos}</h2>${vialForm(v)}<div class="modal-actions"><button class="btn" onclick="closeModal()">CANCEL</button><button class="btn btn-success" onclick="saveVial(${r},${c})">SAVE</button></div>`);}
+async function saveVial(r,c){const data=vialFromForm();if(!data.name){toast('Sample name required','err');return;}try{await api('PUT',`/boxes/${curBox.id}/vials/${r}/${c}`,data);closeModal();toast('Sample saved');selVial={r,c};const{box,vials}=await api('GET',`/boxes/${curBox.id}/vials`);curBox=box;curBox._vials=vials;renderBox();}catch(e){toast(e.message,'err');}}
+function confirmRemoveVial(r,c){
+  const vMap={};for(const v of curBox._vials||[]) vMap[`${v.row_index},${v.col_index}`]=v;
+  const v=vMap[`${r},${c}`];
+  const arch=settings.archiveOnDelete;
+  confirmDialog(arch?'Archive Sample':'Remove Sample',
+    arch?`Archive "<strong>${escHtml(v?.name||'')}</strong>"? Recoverable from the Archive view.`
+        :`Permanently remove "<strong>${escHtml(v?.name||'')}</strong>" from position ${rowLbl(r)}${colLbl(c)}?`,
+    async()=>{
+      try{
+        await api('DELETE',`/boxes/${curBox.id}/vials/${r}/${c}?changedBy=${encodeURIComponent(getRes())}${arch?'&archive=true':''}`);
+        toast(`Sample ${arch?'archived':'removed'}`);selVial=null;
+        const{box,vials}=await api('GET',`/boxes/${curBox.id}/vials`);
+        curBox=box;curBox._vials=vials;renderBox();
+      }catch(e){toast(e.message,'err');}
+    });
+}
+
+// ── EXPORT / IMPORT ───────────────────────────────────────────────────────────
+function openExportModal(){
+  openModal(`<h2>Export Data</h2>
+    <div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);line-height:2;margin-bottom:16px">
+      Export the full inventory for backup or migration.<br>
+      CSV opens directly in Excel or Google Sheets.
+    </div>
+    <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
+      <button class="btn" onclick="closeModal()">CANCEL</button>
+      <a href="/api/export/csv" target="_blank"><button class="btn btn-success" onclick="closeModal()">↓ DOWNLOAD CSV</button></a>
+      <a href="/api/export" target="_blank"><button class="btn btn-warn" onclick="closeModal()">↓ DOWNLOAD JSON</button></a>
+    </div>`);
+}
+
+// ============================================================================
+// QR VIAL SCAN WORKFLOW — state machine
+// ============================================================================
+//
+// This workflow is triggered by the "▦ SCAN VIAL QR" button on the home page.
+// It guides the operator through a branching flow entirely inside the modal:
+//
+//   STEP 1 — Scan
+//     Open camera (or accept manual entry). Wait for a QR value.
+//
+//   STEP 2a — Found (QR matches a vial in the database)
+//     Show vial details + location path.
+//     Confirm: "Remove this vial from storage?"
+//       Yes → DELETE /api/boxes/:boxId/vials/:row/:col → done
+//       No  → close modal
+//
+//   STEP 2b — Not found (QR not in database)
+//     Inform user: "QR code not in inventory — add it?"
+//       No  → close modal
+//       Yes → proceed to step 3
+//
+//   STEP 3 — Select rack
+//     List all racks. Operator clicks one.
+//
+//   STEP 4 — Select box
+//     List all boxes in the chosen rack ordered by slot_position.
+//     Operator clicks one.
+//
+//   STEP 5 — Select position
+//     Show the vial grid for the chosen box (like the box view).
+//     Operator clicks an EMPTY cell.
+//     Occupied cells are shown but not clickable.
+//
+//   STEP 6 — Add vial form
+//     Standard vial add form, QR code field pre-filled and read-only.
+//     Operator fills remaining fields and presses Add.
+//     PUT /api/boxes/:boxId/vials/:row/:col → navigate to that box → done
+//
+// STATE OBJECT
+//   wfState holds everything that persists between steps:
+//     qrCode     — the scanned/typed QR value
+//     rack       — chosen rack object
+//     box        — chosen box object
+//     row, col   — chosen grid position (integers)
+//   It is reset to null at the start of each new workflow run.
+//
+// STEP INDICATOR
+//   Each step renders wfStepBar(currentStep, totalSteps) at the top of the
+//   modal so the operator always knows where they are.
+// ============================================================================
+
+// Persistent state across workflow steps.
+// null means no workflow is in progress.
+let wfState = null;
+
+// ── Step indicator HTML ───────────────────────────────────────────────────────
+// currentStep is 1-based. Labels are abbreviated to fit.
+function wfStepBar(current, labels){
+  let html = '<div class="wf-steps">';
+  labels.forEach((label, i) => {
+    const stepNum = i + 1;
+    const cls = stepNum < current ? 'done' : stepNum === current ? 'active' : '';
+    html += `<div class="wf-step ${cls}" title="Step ${stepNum}: ${label}">${label}</div>`;
+    if(i < labels.length - 1) html += `<div class="wf-step-line"></div>`;
+  });
+  html += '</div>';
+  return html;
+}
+
+// ── STEP 1: Open scanner ──────────────────────────────────────────────────────
+function openVialQRScan(){
+  if(!curTank){ toast('Select a tank first','err'); return; }
+  wfState = { qrCode: null, rack: null, box: null, row: null, col: null };
+
+  openModal(`
+    <h2>▦ SCAN VIAL QR CODE</h2>
+    ${wfStepBar(1, ['Scan','Result','Rack','Box','Position','Details'])}
+
+    <div class="scanner-video-wrap" style="margin-bottom:8px">
+      <video id="wf-video" autoplay playsinline muted style="width:100%;max-height:160px;display:block"></video>
+      <div class="sc-corner sc-tl"></div><div class="sc-corner sc-tr"></div>
+      <div class="sc-corner sc-bl"></div><div class="sc-corner sc-br"></div>
+    </div>
+
+    <!-- Debug preview: shows what ZXing is actually receiving.
+         If this looks like the camera feed, ZXing should detect the code.
+         If this is black, the canvas capture has a security restriction. -->
+    <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
+      <div style="flex:1">
+        <div id="wf-scan-status" class="detecting" style="font-family:var(--font-mono);font-size:11px;text-align:center;padding:6px;background:var(--bg);color:var(--accent)">
+          Initialising camera…
+        </div>
+      </div>
+      <div style="flex-shrink:0;text-align:center">
+        <canvas id="wf-debug-canvas" width="80" height="60"
+          style="border:1px solid var(--border);display:block;image-rendering:pixelated"
+          title="What ZXing is scanning — should match camera feed"></canvas>
+        <div style="font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-top:2px">scanner view</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Or enter QR value manually</label>
+      <div class="scan-row">
+        <input class="form-input" id="wf-manual" placeholder="Type or paste QR code value…"/>
+        <button class="btn btn-success" onclick="wfUseManual()">USE</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" onclick="wfCancel()">CANCEL</button>
+    </div>
+  `);
+
+  wfStartCamera();
+}
+
+// Start the in-modal camera stream and frame-scanning loop.
+let wfStream = null, wfRAF = null;
+let _wfCanvas = null, _wfLastScan = 0, _wfFrameCount = 0;
+
+// Scanner engine: ZXing only.
+// ZXing (@zxing/library) handles QR, Data Matrix, Code 128/39/93,
+// EAN-13/8, UPC-A/E, PDF417, Aztec, ITF — all from a single library
+// served locally from node_modules, no CDN or browser API dependency.
+
+let _zxingReader = null;
+let _scannerType = null;  // 'zxing' | 'none'
+
+async function wfInitScanner(){
+  if(_scannerType) return;
+
+  if(typeof ZXing !== 'undefined' && ZXing.MultiFormatReader){
+    try{
+      const hints = new Map();
+      const fmts = [
+        ZXing.BarcodeFormat.QR_CODE,
+        ZXing.BarcodeFormat.DATA_MATRIX,
+        ZXing.BarcodeFormat.CODE_128,
+        ZXing.BarcodeFormat.CODE_39,
+        ZXing.BarcodeFormat.CODE_93,
+        ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.EAN_8,
+        ZXing.BarcodeFormat.UPC_A,
+        ZXing.BarcodeFormat.UPC_E,
+        ZXing.BarcodeFormat.PDF_417,
+        ZXing.BarcodeFormat.AZTEC,
+        ZXing.BarcodeFormat.ITF,
+      ].filter(Boolean);
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, fmts);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      _zxingReader = new ZXing.MultiFormatReader();
+      _zxingReader.setHints(hints);
+      _scannerType = 'zxing';
+      console.log('[scanner] ZXing MultiFormatReader ready');
+    }catch(e){
+      _scannerType = 'none';
+      console.error('[scanner] ZXing init failed:', e.message);
+    }
+  } else {
+    _scannerType = 'none';
+    console.error('[scanner] ZXing library not loaded — check /zxing.min.js');
+  }
+}
+
+function _zxingDecode(imageData){
+  if(!_zxingReader) return null;
+  try{
+    const lum = new ZXing.RGBLuminanceSource(imageData.data, imageData.width, imageData.height);
+    const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
+    return _zxingReader.decode(bmp).getText();
+  }catch(e){ return null; }
+}
+
+function wfStartCamera(){
+  wfInitScanner().then(() => {
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode:{ ideal:'environment' }, width:{ ideal:640 }, height:{ ideal:480 } }
+    })
+    .then(stream => {
+      wfStream = stream;
+      const vid = document.getElementById('wf-video');
+      if(!vid){ wfStopCamera(); return; }
+      vid.srcObject = stream;
+
+      vid.addEventListener('canplay', function onReady(){
+        vid.removeEventListener('canplay', onReady);
+        vid.play().catch(()=>{});
+        const settings = stream.getVideoTracks()[0]?.getSettings() || {};
+        const res = settings.width ? ` ${settings.width}\xd7${settings.height}` : '';
+        const engineLabel = _scannerType === 'zxing' ? 'ZXing (QR · DataMatrix · Barcodes)' : 'unavailable';
+        const st = document.getElementById('wf-scan-status');
+        if(st){
+          if(_scannerType === 'none'){
+            st.textContent = '\u26a0 No scan engine available \u2014 use manual entry.';
+            st.className = '';
+            return;
+          }
+          st.textContent = `${engineLabel}${res} \u2014 hold code steady\u2026`;
+          st.className = 'detecting';
+        }
+        _wfFrameCount = 0;
+        wfRAF = requestAnimationFrame(wfScanFrame);
+      }, { once: true });
+
+      setTimeout(() => {
+        if(wfStream && !document.getElementById('wf-video')?.videoWidth){
+          document.getElementById('wf-video')?.play().catch(()=>{});
+          wfRAF = requestAnimationFrame(wfScanFrame);
+        }
+      }, 3000);
+    })
+    .catch(err => {
+      const st = document.getElementById('wf-scan-status');
+      const msg = err.name === 'NotAllowedError' ? 'Camera permission denied \u2014 use manual entry.'
+                : err.name === 'NotFoundError'   ? 'No camera found \u2014 use manual entry.'
+                : `Camera error (${err.name}) \u2014 use manual entry.`;
+      if(st){ st.textContent = msg; st.className = ''; }
+    });
+  });
+}
+
+async function wfScanFrame(){
+  if(!wfStream) return;
+  const vid = document.getElementById('wf-video');
+  if(!vid || !vid.isConnected){ wfStopCamera(); return; }
+  if(!vid.videoWidth){ wfRAF = requestAnimationFrame(wfScanFrame); return; }
+
+  const now = performance.now();
+  if(now - _wfLastScan < 66){ wfRAF = requestAnimationFrame(wfScanFrame); return; }
+  _wfLastScan = now;
+
+  _wfFrameCount++;
+  const st = document.getElementById('wf-scan-status');
+  if(st && _wfFrameCount % 5 === 0){
+    st.textContent = `Scanning via ${_scannerType}\u2026 (${_wfFrameCount} frames)`;
+  }
+
+  // Debug preview: update small thumbnail every 10 frames
+  if(_wfFrameCount % 10 === 1){
+    const dbg = document.getElementById('wf-debug-canvas');
+    if(dbg) dbg.getContext('2d').drawImage(vid, 0, 0, dbg.width, dbg.height);
+  }
+
+  let detected = null;
+
+  // ── ZXing MultiFormatReader ────────────────────────────────────────────────
+  // Pure JS, same broad format coverage as BarcodeDetector.
+  // We run two passes: full frame, then a centre crop (helps small codes).
+  if(!detected && _zxingReader){
+    if(!_wfCanvas) _wfCanvas = document.createElement('canvas');
+    const W = vid.videoWidth, H = vid.videoHeight;
+    const passes = [
+      { sx:0,   sy:0,   sw:W,   sh:H,   dw:W,   dh:H   },  // full frame
+      { sx:W/4, sy:H/4, sw:W/2, sh:H/2, dw:W/2, dh:H/2 },  // centre crop
+    ];
+    for(const p of passes){
+      if(detected) break;
+      _wfCanvas.width = p.dw; _wfCanvas.height = p.dh;
+      const ctx = _wfCanvas.getContext('2d', { willReadFrequently:true });
+      ctx.drawImage(vid, p.sx, p.sy, p.sw, p.sh, 0, 0, p.dw, p.dh);
+      detected = _zxingDecode(ctx.getImageData(0, 0, p.dw, p.dh));
+    }
+  }
+
+
+  if(detected){ wfStopCamera(); wfHandleQR(detected); return; }
+  wfRAF = requestAnimationFrame(wfScanFrame);
+}
+
+function wfStopCamera(){
+  if(wfStream){ wfStream.getTracks().forEach(t => t.stop()); wfStream = null; }
+  if(wfRAF){ cancelAnimationFrame(wfRAF); wfRAF = null; }
+}
+
+function wfUseManual(){
+  const val = (document.getElementById('wf-manual')?.value || '').trim();
+  if(!val){ toast('Enter a QR code value first', 'err'); return; }
+  wfStopCamera();
+  wfHandleQR(val);
+}
+
+function wfCancel(){
+  wfStopCamera();
+  wfState = null;
+  closeModal();
+}
+
+// Close-modal click should also stop the camera
+document.getElementById('modal').addEventListener('click', e => {
+  if(e.target === document.getElementById('modal')){
+    wfStopCamera();
+    wfState = null;
+  }
+});
+
+// ── STEP 2: Look up QR code and branch ────────────────────────────────────────
+async function wfHandleQR(code){
+  wfState.qrCode = code;
+
+  // Show a brief "looking up…" status in the modal before the fetch returns
+  const statusEl = document.getElementById('wf-scan-status');
+  if(statusEl){
+    statusEl.textContent = 'Looking up QR code…';
+    statusEl.className = 'detecting';
+  }
+
+  try {
+    // Exact-match lookup — returns 200 with vial data, or 404
+    const result = await api('GET', `/vials/by-qr?code=${encodeURIComponent(code)}`);
+    // Found — show removal confirmation
+    wfShowFound(result);
+  } catch(e) {
+    if(e.message.includes('No vial found') || e.message.includes('404')){
+      // Not found — show add confirmation
+      wfShowNotFound(code);
+    } else {
+      toast('Lookup failed: ' + e.message, 'err');
+      wfCancel();
+    }
+  }
+}
+
+// ── STEP 2a: Found — confirm removal ─────────────────────────────────────────
+function wfShowFound(result){
+  const { vial, box, rack, path, position_label } = result;
+
+  openModal(`
+    <h2>▦ VIAL FOUND</h2>
+    ${wfStepBar(2, ['Scan','Confirm','—','—','—','—'])}
+
+    <div class="wf-result-card found">
+      <div class="wf-result-title">✓ Match found in inventory</div>
+      <div class="wf-result-name">${escHtml(vial.name)}</div>
+      <div class="wf-result-path">📍 ${escHtml(path)}</div>
+      <div class="wf-result-meta">
+        ${vial.sample_type ? `<span class="wf-chip">${escHtml(vial.sample_type)}</span>` : ''}
+        ${vial.volume      ? `<span class="wf-chip">${escHtml(vial.volume)}</span>` : ''}
+        ${vial.researcher  ? `<span class="wf-chip">${escHtml(vial.researcher)}</span>` : ''}
+        <span class="wf-chip" style="border-color:var(--accent2);color:var(--accent)">QR: ${escHtml(vial.qr_code)}</span>
+      </div>
+    </div>
+
+    <div style="font-family:var(--font-mono);font-size:12px;color:var(--text);margin-bottom:16px">
+      Remove this vial from storage?
+      <span style="color:var(--danger);display:block;font-size:10px;margin-top:4px">⚠ This will delete the vial record permanently.</span>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="wfCancel()">CANCEL</button>
+      <button class="btn" onclick="wfGoToVial('${escHtml(rack.id)}','${escHtml(box.id)}',${vial.row_index},${vial.col_index})">VIEW LOCATION</button>
+      <button class="btn btn-danger" onclick="wfRemoveVial('${escHtml(box.id)}',${vial.row_index},${vial.col_index},'${escHtml(vial.name)}','${escHtml(rack.id)}')">✕ REMOVE</button>
+    </div>
+  `);
+}
+
+async function wfRemoveVial(boxId, row, col, name, rackId){
+  try {
+    await api('DELETE', `/boxes/${boxId}/vials/${row}/${col}?changedBy=${encodeURIComponent(getRes())}`);
+    wfState = null;
+    closeModal();
+    toast(`Vial "${name}" removed from inventory`);
+    // If we're currently looking at this box, refresh the grid
+    if(view === 'box' && curBox && curBox.id === boxId){
+      const { box, vials } = await api('GET', `/boxes/${boxId}/vials`);
+      curBox = box; curBox._vials = vials; renderBox();
+    }
+    // If we're on the home page, nothing to refresh
+  } catch(e){
+    toast('Remove failed: ' + e.message, 'err');
+  }
+}
+
+function wfGoToVial(rackId, boxId, row, col){
+  wfCancel();
+  highlightVial = { r: row, c: col };
+  selVial = { r: row, c: col };
+  goBox(rackId, boxId);
+}
+
+// ── STEP 2b: Not found — confirm add ─────────────────────────────────────────
+function wfShowNotFound(code){
+  openModal(`
+    <h2>▦ QR NOT FOUND</h2>
+    ${wfStepBar(2, ['Scan','Confirm','Rack','Box','Position','Details'])}
+
+    <div class="wf-result-card notfound">
+      <div class="wf-result-title">⚠ Not in inventory</div>
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:4px">
+        QR code: <span style="color:var(--text)">${escHtml(code)}</span>
+      </div>
+    </div>
+
+    <div style="font-family:var(--font-mono);font-size:12px;color:var(--text);margin-bottom:16px">
+      This QR code is not registered. Would you like to add this vial to storage?
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-danger" onclick="wfCancel()">NO, CANCEL</button>
+      <button class="btn btn-success" onclick="wfSelectRack()">YES, ADD VIAL ›</button>
+    </div>
+  `);
+}
+
+// ── STEP 3: Select rack ───────────────────────────────────────────────────────
+async function wfSelectRack(){
+  showLoading();
+  try {
+    const racks = await api('GET', `/tanks/${curTank.id}/racks`);
+    if(!racks.length){
+      hideLoading();
+      toast('No racks found. Create a rack first.', 'err');
+      return;
+    }
+
+    const items = racks.map(r => `
+      <div class="wf-select-item" onclick="wfPickRack(${JSON.stringify(JSON.stringify(r))})">
+        <div class="wf-select-item-left">
+          <div class="wf-select-item-name">${escHtml(r.name)}</div>
+          <div class="wf-select-item-sub">${escHtml(r.position||'—')} · ${r.capacity} slots</div>
+        </div>
+        <div class="wf-select-item-arrow">›</div>
+      </div>`).join('');
+
+    hideLoading();
+    openModal(`
+      <h2>▦ SELECT RACK</h2>
+      ${wfStepBar(3, ['Scan','Confirm','Rack','Box','Position','Details'])}
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:12px">
+        QR: <span style="color:var(--accent)">${escHtml(wfState.qrCode)}</span>
+      </div>
+      <div class="wf-select-list">${items}</div>
+      <div class="modal-actions"><button class="btn" onclick="wfShowNotFound(wfState.qrCode)">‹ BACK</button></div>
+    `);
+  } catch(e){ hideLoading(); toast(e.message,'err'); }
+}
+
+// onclick receives a double-JSON-stringified rack to safely pass objects
+function wfPickRack(rackJson){
+  wfState.rack = JSON.parse(rackJson);
+  wfSelectBox();
+}
+
+// ── STEP 4: Select box ────────────────────────────────────────────────────────
+async function wfSelectBox(){
+  showLoading();
+  try {
+    const boxes = await api('GET', `/racks/${wfState.rack.id}/boxes`);
+    if(!boxes.length){
+      hideLoading();
+      toast('No boxes in this rack. Create a box first.', 'err');
+      return;
+    }
+
+    const items = boxes.map(b => {
+      const cap = b.rows * b.cols;
+      return `
+        <div class="wf-select-item" onclick="wfPickBox(${JSON.stringify(JSON.stringify(b))})">
+          <div class="wf-select-item-left">
+            <div class="wf-select-item-name">${escHtml(b.name)}</div>
+            <div class="wf-select-item-sub">Slot ${b.slot_position} · ${b.rows}×${b.cols} grid</div>
+          </div>
+          <div class="wf-select-item-arrow">›</div>
+        </div>`;
+    }).join('');
+
+    hideLoading();
+    openModal(`
+      <h2>▦ SELECT BOX</h2>
+      ${wfStepBar(4, ['Scan','Confirm','Rack','Box','Position','Details'])}
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:12px">
+        Rack: <span style="color:var(--accent)">${escHtml(wfState.rack.name)}</span>
+      </div>
+      <div class="wf-select-list">${items}</div>
+      <div class="modal-actions"><button class="btn" onclick="wfSelectRack()">‹ BACK</button></div>
+    `);
+  } catch(e){ hideLoading(); toast(e.message,'err'); }
+}
+
+function wfPickBox(boxJson){
+  wfState.box = JSON.parse(boxJson);
+  wfSelectPosition();
+}
+
+// ── STEP 5: Select position ───────────────────────────────────────────────────
+async function wfSelectPosition(){
+  showLoading();
+  try {
+    const { box, vials } = await api('GET', `/boxes/${wfState.box.id}/vials`);
+    wfState.box = box;
+    const vialMap = {};
+    for(const v of vials) vialMap[`${v.row_index},${v.col_index}`] = v;
+
+    const rows = box.rows, cols = box.cols;
+
+    // Build column labels
+    let colHtml = `<div class="col-labels-row"><div class="col-label-spacer"></div><div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:4px;flex:1">`;
+    for(let c = 0; c < cols; c++) colHtml += `<div class="col-label">${colLbl(c)}</div>`;
+    colHtml += '</div></div>';
+
+    // Build vial grid — occupied cells are dimmed and non-clickable
+    let gridHtml = '';
+    for(let r = 0; r < rows; r++){
+      gridHtml += `<div class="row-wrap"><div class="row-label">${rowLbl(r)}</div><div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:4px;flex:1">`;
+      for(let c = 0; c < cols; c++){
+        const v = vialMap[`${r},${c}`];
+        if(v){
+          // Occupied — show filled, non-interactive
+          gridHtml += `<div class="vial occupied" style="cursor:not-allowed;opacity:.5" title="${escHtml(v.name)} (occupied)">●</div>`;
+        } else {
+          // Empty — clickable
+          gridHtml += `<div class="vial" onclick="wfPickPosition(${r},${c})" title="Add to ${rowLbl(r)}${colLbl(c)}"></div>`;
+        }
+      }
+      gridHtml += '</div></div>';
+    }
+
+    const usedCount = vials.length;
+    const capCount  = rows * cols;
+
+    hideLoading();
+    openModal(`
+      <h2>▦ SELECT POSITION</h2>
+      ${wfStepBar(5, ['Scan','Confirm','Rack','Box','Position','Details'])}
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:12px">
+        ${escHtml(wfState.rack.name)} › Slot ${wfState.box.slot_position} › <span style="color:var(--accent)">${escHtml(box.name)}</span>
+        &nbsp;·&nbsp; ${usedCount}/${capCount} occupied
+      </div>
+
+      <div class="wf-grid-wrap">
+        <div class="wf-grid-label">Click an empty cell to place the vial there.</div>
+        <div class="legend" style="margin-bottom:10px">
+          <div class="legend-item"><div class="legend-box" style="background:rgba(0,120,180,.25);border-color:var(--accent2);opacity:.5"></div>Occupied (unavailable)</div>
+          <div class="legend-item"><div class="legend-box" style="background:var(--surface);border-color:var(--border)"></div>Empty (click to select)</div>
+        </div>
+        ${colHtml}
+        ${gridHtml}
+      </div>
+
+      <div class="modal-actions"><button class="btn" onclick="wfSelectBox()">‹ BACK</button></div>
+    `);
+  } catch(e){ hideLoading(); toast(e.message,'err'); }
+}
+
+function wfPickPosition(row, col){
+  wfState.row = row;
+  wfState.col = col;
+  wfShowAddForm();
+}
+
+// ── STEP 6: Add vial form — QR pre-filled ────────────────────────────────────
+// This step reuses the existing vialForm() helper but with the QR code
+// pre-filled and marked read-only (since it came from the scanner).
+// The form renders inside the workflow modal instead of the standard modal.
+function wfShowAddForm(){
+  const pos = `${rowLbl(wfState.row)}${colLbl(wfState.col)}`;
+
+  // Build a vial form with the scanned QR pre-filled.
+  // We inline a small override: the qr_code field is made read-only
+  // so the operator can't accidentally change it after scanning.
+  const formHtml = `
+    <div class="form-group"><label class="form-label">Sample Name *</label><input class="form-input" id="f-vname" placeholder="e.g. HEK293-GFP-P12"/></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="f-vtype">
+          ${['','Cell Line','Bacteria','Virus','DNA','RNA','Protein','Serum','Tissue','Other'].map(t=>`<option value="${t}">${t||'—'}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Date Stored</label>
+        <input class="form-input" id="f-vdate" type="date" value="${new Date().toISOString().slice(0,10)}"/>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Volume</label><input class="form-input" id="f-vvol" placeholder="500 µL"/></div>
+      <div class="form-group"><label class="form-label">Concentration</label><input class="form-input" id="f-vconc" placeholder="1×10⁶"/></div>
+    </div>
+    <div class="form-group"><label class="form-label">Researcher</label><input class="form-input" id="f-vres" value="${escHtml(getRes())}" placeholder="Name"/></div>
+    <div class="form-group">
+      <label class="form-label">QR Code <span style="color:var(--success);font-size:9px">● SCANNED</span></label>
+      <!-- Read-only: value came from the scanner; shown for confirmation only -->
+      <input class="form-input" id="f-vqr" value="${escHtml(wfState.qrCode)}" readonly
+        style="color:var(--accent);border-color:var(--success);cursor:default"/>
+    </div>
+    <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="f-vnotes"></textarea></div>`;
+
+  openModal(`
+    <h2>▦ ADD VIAL — ${escHtml(wfState.box.name)} / ${pos}</h2>
+    ${wfStepBar(6, ['Scan','Confirm','Rack','Box','Position','Details'])}
+
+    <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:14px">
+      ${escHtml(wfState.rack.name)} › Slot ${wfState.box.slot_position} › ${escHtml(wfState.box.name)} ›
+      <span style="color:var(--accent)">Position ${pos}</span>
+    </div>
+
+    ${formHtml}
+
+    <div class="modal-actions">
+      <button class="btn" onclick="wfSelectPosition()">‹ BACK</button>
+      <button class="btn btn-success" onclick="wfSaveVial()">＋ ADD VIAL</button>
+    </div>
+  `);
+}
+
+async function wfSaveVial(){
+  const name = (document.getElementById('f-vname')?.value || '').trim();
+  if(!name){ toast('Sample name is required', 'err'); return; }
+
+  const payload = {
+    name,
+    sample_type:   document.getElementById('f-vtype')?.value   || '',
+    date_stored:   document.getElementById('f-vdate')?.value   || '',
+    volume:        document.getElementById('f-vvol')?.value.trim()  || '',
+    concentration: document.getElementById('f-vconc')?.value.trim() || '',
+    researcher:    document.getElementById('f-vres')?.value.trim()  || getRes(),
+    qr_code:       wfState.qrCode,   // always from the scan, not the (read-only) input
+    notes:         document.getElementById('f-vnotes')?.value.trim() || '',
+    changedBy:     getRes(),
+  };
+
+  try {
+    await api('PUT',
+      `/boxes/${wfState.box.id}/vials/${wfState.row}/${wfState.col}`,
+      payload
+    );
+
+    const boxId  = wfState.box.id;
+    const rackId = wfState.rack.id;
+    const row    = wfState.row;
+    const col    = wfState.col;
+
+    wfState = null;
+    closeModal();
+    toast(`Vial "${name}" added at ${rowLbl(row)}${colLbl(col)}`);
+
+    // Navigate to the box view and highlight the newly added vial
+    highlightVial = { r: row, c: col };
+    selVial       = { r: row, c: col };
+    await goBox(rackId, boxId);
+
+  } catch(e){
+    toast('Save failed: ' + e.message, 'err');
+  }
+}
+
+// ── ARCHIVE VIEW ──────────────────────────────────────────────────────────────
+async function renderArchive(){
+  showLoading();
+  const el=document.getElementById('main-content');
+  let archiveFilter='all', archiveSearch='';
+
+  async function fetchAndRender(){
+    try{
+      const params=new URLSearchParams();
+      if(archiveFilter!=='all') params.set('type',archiveFilter);
+      if(archiveSearch) params.set('q',archiveSearch);
+      const data=await api('GET',`/archive?${params}`);
+      const{results,total}=data;
+
+      const fmtArchived=d=>d?new Date(d).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+
+      const pills=[
+        {key:'all',   label:'All',   count:total},
+        {key:'rack',  label:'Racks', count:results.racks.length},
+        {key:'box',   label:'Boxes', count:results.boxes.length},
+        {key:'vial',  label:'Vials', count:results.vials.length},
+      ].map(p=>`<button class="filter-pill ${archiveFilter===p.key?'active':''}" onclick="setArchiveFilter('${p.key}')">${p.label}<span class="pill-count">${p.count}</span></button>`).join('');
+
+      let rows='';
+
+      if((archiveFilter==='all'||archiveFilter==='rack')&&results.racks.length){
+        rows+=`<div class="results-section"><div class="results-section-title">Racks <span class="count-badge rack-count-badge">${results.racks.length}</span></div>`;
+        for(const r of results.racks){
+          rows+=`<div class="result-card">
+            <div class="result-icon rack">RK</div>
+            <div class="result-body">
+              <div class="result-name">${escHtml(r.name)}</div>
+              <div class="result-path">📍 ${escHtml(r.position||'—')} · Archived ${fmtArchived(r.archived_at)}</div>
+            </div>
+            <div class="result-meta">
+              <button class="btn btn-sm btn-success" onclick="restoreItem('rack','${r.id}','${escHtml(r.name)}')">↺ RESTORE</button>
+            </div>
+          </div>`;
+        }
+        rows+=`</div>`;
+      }
+
+      if((archiveFilter==='all'||archiveFilter==='box')&&results.boxes.length){
+        rows+=`<div class="results-section"><div class="results-section-title">Boxes <span class="count-badge box-count-badge">${results.boxes.length}</span></div>`;
+        for(const b of results.boxes){
+          rows+=`<div class="result-card">
+            <div class="result-icon box">BX</div>
+            <div class="result-body">
+              <div class="result-name">${escHtml(b.name)}</div>
+              <div class="result-path">📍 ${escHtml(b.rack_name)} · Slot ${b.slot_position} · Archived ${fmtArchived(b.archived_at)}</div>
+            </div>
+            <div class="result-meta">
+              <button class="btn btn-sm btn-success" onclick="restoreItem('box','${b.id}','${escHtml(b.name)}')">↺ RESTORE</button>
+            </div>
+          </div>`;
+        }
+        rows+=`</div>`;
+      }
+
+      if((archiveFilter==='all'||archiveFilter==='vial')&&results.vials.length){
+        rows+=`<div class="results-section"><div class="results-section-title">Vials <span class="count-badge vial-count-badge">${results.vials.length}</span></div>`;
+        for(const v of results.vials){
+          rows+=`<div class="result-card">
+            <div class="result-icon vial">${escHtml(v.position_label||'—')}</div>
+            <div class="result-body">
+              <div class="result-name">${escHtml(v.name)}</div>
+              <div class="result-path">📍 ${escHtml(v.path||'—')} · Archived ${fmtArchived(v.archived_at)}</div>
+              ${v.sample_type?`<div class="result-match">${escHtml(v.sample_type)}${v.researcher?' · '+escHtml(v.researcher):''}</div>`:''}
+            </div>
+            <div class="result-meta">
+              <button class="btn btn-sm btn-success" onclick="restoreItem('vial','${v.id}','${escHtml(v.name)}')">↺ RESTORE</button>
+            </div>
+          </div>`;
+        }
+        rows+=`</div>`;
+      }
+
+      el.innerHTML=`
+        <div class="section-header">
+          <div class="section-left">
+            <div class="section-title">Archive</div>
+            <div class="section-sub">${total} archived item${total!==1?'s':''}</div>
+          </div>
+          <div class="section-right">
+            <button class="btn btn-danger" onclick="openPurgeModal()">✕ PURGE ARCHIVE</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <input class="form-input" style="flex:1;max-width:260px" placeholder="Search archived items…"
+            value="${escHtml(archiveSearch)}" oninput="archiveSearch=this.value;fetchAndRender()"/>
+        </div>
+        <div class="search-filters">${pills}</div>
+        ${total===0
+          ?`<div class="empty-state">No archived items.<br><span style="font-size:10px">Enable "Archive on delete" in Settings to keep deleted items recoverable.</span></div>`
+          :rows}`;
+    }catch(e){toast(e.message,'err');}finally{hideLoading();}
+  }
+
+  // Make filter setter accessible from onclick
+  window.setArchiveFilter=f=>{archiveFilter=f;showLoading();fetchAndRender();};
+  await fetchAndRender();
+}
+
+async function restoreItem(entityType,entityId,name){
+  try{
+    await api('POST','/archive/restore',{entityType,entityId,changedBy:getRes()});
+    toast(`"${name}" restored`);
+    renderArchive();
+  }catch(e){toast(e.message,'err');}
+}
+
+function openPurgeModal(){
+  openModal(`<h2>✕ PURGE ARCHIVE</h2>
+    <div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:14px">
+      Permanently deletes all archived items.<br>
+      <span style="color:var(--danger)">⚠ This cannot be undone.</span>
+    </div>
+    <div class="form-group"><label class="form-label">Purge scope</label>
+      <select class="form-select" id="f-purge-type">
+        <option value="all">All archived items (racks, boxes, vials)</option>
+        <option value="vial">Archived vials only</option>
+        <option value="box">Archived boxes + their vials</option>
+        <option value="rack">Archived racks + their boxes + vials</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">CANCEL</button>
+      <button class="btn btn-danger" onclick="doPurge()">✕ PURGE</button>
+    </div>`);
+}
+
+async function doPurge(){
+  const type=document.getElementById('f-purge-type').value;
+  try{
+    const res=await api('DELETE',`/archive/purge?type=${type}&changedBy=${encodeURIComponent(getRes())}`);
+    closeModal();
+    const c=res.counts;
+    toast(`Purged: ${c.racks} racks, ${c.boxes} boxes, ${c.vials} vials`,'info');
+    renderArchive();
+  }catch(e){toast(e.message,'err');}
+}
+
+// ============================================================================
+// MOVE VIAL / MOVE BOX — multi-step modal workflow
+// ============================================================================
+//
+// openMoveVial(row, col)  — opens the move workflow for the vial at row/col
+//                           in the current box (curBox)
+// openMoveBox(boxId, ...)  — opens the move workflow for a box
+//
+// Both workflows share the same step sequence for picking the destination:
+//   Step 1: Pick tank
+//   Step 2: Pick rack (within chosen tank)
+//   Step 3: Pick slot (box move) / Pick box (vial move)
+//   Step 4 (vial only): Pick position within chosen box
+//   Confirm → call API → navigate to new location
+//
+// State is kept in mvState so each step can read prior choices.
+// ============================================================================
+
+let mvState = null;  // { mode: 'vial'|'box', ...source info, tank, rack, box, slot }
+
+// ── Helper: step bar labels ───────────────────────────────────────────────────
+function mvStepBar(current, labels){
+  let h = '<div class="wf-steps">';
+  labels.forEach((label, i) => {
+    const n   = i + 1;
+    const cls = n < current ? 'done' : n === current ? 'active' : '';
+    h += `<div class="wf-step ${cls}" title="${label}">${label}</div>`;
+    if(i < labels.length - 1) h += '<div class="wf-step-line"></div>';
+  });
+  return h + '</div>';
+}
+
+// ── Helper: "moving from" context card ───────────────────────────────────────
+function mvFromCard(){
+  if(mvState.mode === 'vial'){
+    const pos = `${rowLbl(mvState.row)}${colLbl(mvState.col)}`;
+    return `<div class="move-from">
+      <div class="move-from-label">Moving vial</div>
+      <div class="move-from-value">${escHtml(mvState.vialName)}</div>
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:3px">
+        from ${escHtml(mvState.sourceRackName)} › Slot ${mvState.sourceSlot} › ${escHtml(mvState.sourceBoxName)} › ${pos}
+      </div>
+    </div>`;
+  } else {
+    return `<div class="move-from">
+      <div class="move-from-label">Moving box</div>
+      <div class="move-from-value">${escHtml(mvState.boxName)}</div>
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:3px">
+        from ${escHtml(mvState.sourceRackName)} › Slot ${mvState.sourceSlot}
+      </div>
+    </div>`;
+  }
+}
+
+// =============================================================================
+// ENTRY POINTS
+// =============================================================================
+
+function openMoveVial(row, col){
+  const vMap = {};
+  for(const v of curBox._vials||[]) vMap[`${v.row_index},${v.col_index}`] = v;
+  const v = vMap[`${row},${col}`];
+  if(!v){ toast('No vial at that position', 'err'); return; }
+
+  mvState = {
+    mode:          'vial',
+    vialId:        v.id,
+    vialName:      v.name,
+    sourceBoxId:   curBox.id,
+    sourceBoxName: curBox.name,
+    sourceSlot:    curBox.slot_position,
+    sourceRackName: curRack?.name || '—',
+    row, col,
+    // destination — filled in as user picks
+    tank: null, rack: null, box: null, targetRow: null, targetCol: null,
+  };
+  mvPickTank();
+}
+
+function openMoveBox(boxId, boxName, slotPos){
+  mvState = {
+    mode:          'box',
+    boxId,
+    boxName,
+    sourceSlot:    slotPos,
+    sourceRackId:  curRack?.id,
+    sourceRackName: curRack?.name || '—',
+    tank: null, rack: null, targetSlot: null,
+  };
+  mvPickTank();
+}
+
+// =============================================================================
+// STEP 1: Pick tank
+// =============================================================================
+async function mvPickTank(){
+  showLoading();
+  try{
+    const tanks = await api('GET', '/tanks');
+    const labels = mvState.mode === 'vial'
+      ? ['Tank','Rack','Box','Position']
+      : ['Tank','Rack','Slot'];
+    const items = tanks.map(t => `
+      <div class="wf-select-item" data-mv-tank-id="${t.id}" data-mv-tank-name="${escHtml(t.name)}">
+        <div class="wf-select-item-left">
+          <div class="wf-select-item-name">${escHtml(t.name)}</div>
+        </div>
+        <div class="wf-select-item-arrow">›</div>
+      </div>`).join('');
+    hideLoading();
+    openModal(`
+      <h2>↦ MOVE — SELECT TANK</h2>
+      ${mvStepBar(1, labels)}
+      ${mvFromCard()}
+      <div class="wf-select-list" id="mv-tank-list">${items}</div>
+      <div class="modal-actions"><button class="btn" onclick="closeModal()">CANCEL</button></div>`);
+
+    document.getElementById('mv-tank-list')?.querySelectorAll('[data-mv-tank-id]').forEach(el => {
+      el.addEventListener('click', () => {
+        mvState.tank = { id: el.dataset.mvTankId, name: el.dataset.mvTankName };
+        mvPickRack();
+      });
+    });
+  }catch(e){ hideLoading(); toast(e.message,'err'); }
+}
+
+// =============================================================================
+// STEP 2: Pick rack
+// =============================================================================
+async function mvPickRack(){
+  showLoading();
+  try{
+    const racks = await api('GET', `/tanks/${mvState.tank.id}/racks`);
+    if(!racks.length){ hideLoading(); toast('No racks in this tank','err'); return; }
+    const labels = mvState.mode === 'vial' ? ['Tank','Rack','Box','Position'] : ['Tank','Rack','Slot'];
+    const items = racks.map(r => `
+      <div class="wf-select-item" data-mv-rack='${JSON.stringify({id:r.id,name:r.name,capacity:r.capacity})}'>
+        <div class="wf-select-item-left">
+          <div class="wf-select-item-name">${escHtml(r.name)}</div>
+          <div class="wf-select-item-sub">${escHtml(r.position||'—')} · ${r.capacity} slots</div>
+        </div>
+        <div class="wf-select-item-arrow">›</div>
+      </div>`).join('');
+    hideLoading();
+    openModal(`
+      <h2>↦ MOVE — SELECT RACK</h2>
+      ${mvStepBar(2, labels)}
+      ${mvFromCard()}
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:10px">
+        Tank: <span style="color:var(--accent)">${escHtml(mvState.tank.name)}</span>
+      </div>
+      <div class="wf-select-list" id="mv-rack-list">${items}</div>
+      <div class="modal-actions"><button class="btn" onclick="mvPickTank()">‹ BACK</button></div>`);
+
+    document.getElementById('mv-rack-list')?.querySelectorAll('[data-mv-rack]').forEach(el => {
+      el.addEventListener('click', () => {
+        mvState.rack = JSON.parse(el.dataset.mvRack);
+        mvState.mode === 'box' ? mvPickSlot() : mvPickBox();
+      });
+    });
+  }catch(e){ hideLoading(); toast(e.message,'err'); }
+}
+
+// =============================================================================
+// STEP 3a (Box move): Pick slot
+// =============================================================================
+async function mvPickSlot(){
+  showLoading();
+  try{
+    const boxes  = await api('GET', `/racks/${mvState.rack.id}/boxes`);
+    const occupied = new Set(boxes.filter(b => b.id !== mvState.boxId).map(b => b.slot_position));
+    hideLoading();
+
+    let slots = '';
+    for(let i = 1; i <= mvState.rack.capacity; i++){
+      if(occupied.has(i)){
+        slots += `<div class="wf-select-item" style="opacity:.45;cursor:not-allowed">
+          <div class="wf-select-item-left">
+            <div class="wf-select-item-name">Slot ${i}</div>
+            <div class="wf-select-item-sub">Occupied</div>
+          </div>
+        </div>`;
+      } else {
+        slots += `<div class="wf-select-item" data-mv-slot="${i}">
+          <div class="wf-select-item-left">
+            <div class="wf-select-item-name">Slot ${i}</div>
+            <div class="wf-select-item-sub">Empty — click to move here</div>
+          </div>
+          <div class="wf-select-item-arrow">›</div>
+        </div>`;
+      }
+    }
+
+    openModal(`
+      <h2>↦ MOVE — SELECT SLOT</h2>
+      ${mvStepBar(3, ['Tank','Rack','Slot'])}
+      ${mvFromCard()}
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:10px">
+        ${escHtml(mvState.tank.name)} › <span style="color:var(--accent)">${escHtml(mvState.rack.name)}</span>
+      </div>
+      <div class="wf-select-list" id="mv-slot-list">${slots}</div>
+      <div class="modal-actions"><button class="btn" onclick="mvPickRack()">‹ BACK</button></div>`);
+
+    document.getElementById('mv-slot-list')?.querySelectorAll('[data-mv-slot]').forEach(el => {
+      el.addEventListener('click', () => {
+        mvState.targetSlot = parseInt(el.dataset.mvSlot, 10);
+        mvConfirmBox();
+      });
+    });
+  }catch(e){ hideLoading(); toast(e.message,'err'); }
+}
+
+async function mvConfirmBox(){
+  openModal(`
+    <h2>↦ CONFIRM MOVE</h2>
+    ${mvFromCard()}
+    <div style="font-family:var(--font-mono);font-size:12px;color:var(--text);margin-bottom:16px">
+      Move to: <span style="color:var(--success)">${escHtml(mvState.tank.name)} › ${escHtml(mvState.rack.name)} › Slot ${mvState.targetSlot}</span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="mvPickSlot()">‹ BACK</button>
+      <button class="btn btn-success" onclick="doMoveBox()">↦ CONFIRM MOVE</button>
+    </div>`);
+}
+
+async function doMoveBox(){
+  try{
+    const res = await api('POST', `/boxes/${mvState.boxId}/move`, {
+      target_rack_id: mvState.rack.id,
+      target_slot:    mvState.targetSlot,
+      changedBy:      getRes()
+    });
+    closeModal();
+    toast(`Box "${mvState.boxName}" moved to ${mvState.rack.name} › Slot ${mvState.targetSlot}`);
+    // Navigate to the new rack location
+    curRack = await api('GET', `/racks/${mvState.rack.id}`);
+    view = 'rack'; updateBreadcrumb(); await renderRack();
+  }catch(e){ toast(e.message, 'err'); }
+}
+
+// =============================================================================
+// STEP 3b (Vial move): Pick box
+// =============================================================================
+async function mvPickBox(){
+  showLoading();
+  try{
+    const boxes = await api('GET', `/racks/${mvState.rack.id}/boxes`);
+    if(!boxes.length){ hideLoading(); toast('No boxes in this rack','err'); return; }
+    const items = boxes.map(b => `
+      <div class="wf-select-item" data-mv-box='${JSON.stringify({id:b.id,name:b.name,slot:b.slot_position,rows:b.rows,cols:b.cols})}'>
+        <div class="wf-select-item-left">
+          <div class="wf-select-item-name">${escHtml(b.name)}</div>
+          <div class="wf-select-item-sub">Slot ${b.slot_position} · ${b.rows}×${b.cols}</div>
+        </div>
+        <div class="wf-select-item-arrow">›</div>
+      </div>`).join('');
+    hideLoading();
+    openModal(`
+      <h2>↦ MOVE — SELECT BOX</h2>
+      ${mvStepBar(3, ['Tank','Rack','Box','Position'])}
+      ${mvFromCard()}
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:10px">
+        ${escHtml(mvState.tank.name)} › <span style="color:var(--accent)">${escHtml(mvState.rack.name)}</span>
+      </div>
+      <div class="wf-select-list" id="mv-box-list">${items}</div>
+      <div class="modal-actions"><button class="btn" onclick="mvPickRack()">‹ BACK</button></div>`);
+
+    document.getElementById('mv-box-list')?.querySelectorAll('[data-mv-box]').forEach(el => {
+      el.addEventListener('click', () => {
+        mvState.box = JSON.parse(el.dataset.mvBox);
+        mvPickPosition();
+      });
+    });
+  }catch(e){ hideLoading(); toast(e.message,'err'); }
+}
+
+// =============================================================================
+// STEP 4 (Vial move): Pick position in the chosen box
+// =============================================================================
+async function mvPickPosition(){
+  showLoading();
+  try{
+    const { box, vials } = await api('GET', `/boxes/${mvState.box.id}/vials`);
+    const occupied = new Set(vials.map(v => `${v.row_index},${v.col_index}`));
+    // Also exclude the vial's current position if moving within same box
+    const isSameBox = mvState.box.id === mvState.sourceBoxId;
+
+    const rows = box.rows, cols = box.cols;
+    let colHtml = `<div class="col-labels-row"><div class="col-label-spacer"></div><div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:4px;flex:1">`;
+    for(let c=0;c<cols;c++) colHtml += `<div class="col-label">${colLbl(c)}</div>`;
+    colHtml += '</div></div>';
+
+    let gridHtml = '';
+    for(let r=0;r<rows;r++){
+      gridHtml += `<div class="row-wrap"><div class="row-label">${rowLbl(r)}</div><div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:4px;flex:1">`;
+      for(let c=0;c<cols;c++){
+        const key = `${r},${c}`;
+        const isSource = isSameBox && r === mvState.row && c === mvState.col;
+        if(occupied.has(key) && !isSource){
+          gridHtml += `<div class="vial occupied" style="cursor:not-allowed;opacity:.5" title="Occupied">●</div>`;
+        } else if(isSource){
+          gridHtml += `<div class="vial selected" title="Current position (${rowLbl(r)}${colLbl(c)})">↦</div>`;
+        } else {
+          gridHtml += `<div class="vial" style="cursor:pointer" data-mv-r="${r}" data-mv-c="${c}" title="Move to ${rowLbl(r)}${colLbl(c)}"></div>`;
+        }
+      }
+      gridHtml += '</div></div>';
+    }
+
+    hideLoading();
+    openModal(`
+      <h2>↦ MOVE — SELECT POSITION</h2>
+      ${mvStepBar(4, ['Tank','Rack','Box','Position'])}
+      ${mvFromCard()}
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:10px">
+        ${escHtml(mvState.rack.name)} › Slot ${mvState.box.slot} › <span style="color:var(--accent)">${escHtml(box.name)}</span>
+      </div>
+      <div class="wf-grid-wrap">
+        <div class="wf-grid-label">Click an empty cell · ↦ = current · ● = occupied</div>
+        ${colHtml}${gridHtml}
+      </div>
+      <div class="modal-actions"><button class="btn" onclick="mvPickBox()">‹ BACK</button></div>`);
+
+    document.querySelectorAll('[data-mv-r]').forEach(el => {
+      el.addEventListener('click', () => {
+        mvState.targetRow = parseInt(el.dataset.mvR, 10);
+        mvState.targetCol = parseInt(el.dataset.mvC, 10);
+        mvConfirmVial();
+      });
+    });
+  }catch(e){ hideLoading(); toast(e.message,'err'); }
+}
+
+async function mvConfirmVial(){
+  const toPos = `${rowLbl(mvState.targetRow)}${colLbl(mvState.targetCol)}`;
+  openModal(`
+    <h2>↦ CONFIRM MOVE</h2>
+    ${mvFromCard()}
+    <div style="font-family:var(--font-mono);font-size:12px;color:var(--text);margin-bottom:16px">
+      Move to: <span style="color:var(--success)">${escHtml(mvState.tank.name)} › ${escHtml(mvState.rack.name)} › ${escHtml(mvState.box.name)} › ${toPos}</span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="mvPickPosition()">‹ BACK</button>
+      <button class="btn btn-success" onclick="doMoveVial()">↦ CONFIRM MOVE</button>
+    </div>`);
+}
+
+async function doMoveVial(){
+  try{
+    await api('POST', '/vials/move', {
+      source_box_id: mvState.sourceBoxId,
+      source_row:    mvState.row,
+      source_col:    mvState.col,
+      target_box_id: mvState.box.id,
+      target_row:    mvState.targetRow,
+      target_col:    mvState.targetCol,
+      changedBy:     getRes()
+    });
+    const toPos = `${rowLbl(mvState.targetRow)}${colLbl(mvState.targetCol)}`;
+    closeModal();
+    toast(`"${mvState.vialName}" moved to ${mvState.box.name} › ${toPos}`);
+    // Navigate to the destination box and highlight the vial
+    highlightVial = { r: mvState.targetRow, c: mvState.targetCol };
+    selVial       = { r: mvState.targetRow, c: mvState.targetCol };
+    await goBox(mvState.rack.id, mvState.box.id);
+  }catch(e){ toast(e.message,'err'); }
+}
+
+// ============================================================================
+// BULK ADD — fill out sample info once, then pick multiple positions
+// ============================================================================
+//
+// Workflow:
+//   Step 1: Fill in the sample form (same fields as single add).
+//   Step 2: Click empty cells in the vial grid to select positions.
+//           Selected cells turn green. Click again to deselect.
+//           Occupied cells are shown but not clickable.
+//   Step 3: Confirm — the same sample data is saved to every selected position.
+//
+// The box/vial grid is re-rendered inline inside the modal, not the main view,
+// so the user can see what they're selecting without leaving the modal.
+// ============================================================================
+
+let _bulkData     = null;   // vial form data from step 1
+let _bulkSelected = new Set(); // Set of "row,col" strings picked in step 2
+
+function openBulkAdd(){
+  if(!curBox){ toast('Open a box first', 'err'); return; }
+  _bulkData     = null;
+  _bulkSelected = new Set();
+  _renderBulkStep1();
+}
+
+function _renderBulkStep1(){
+  openModal(`
+    <h2>＋ BULK ADD — Step 1 of 2: Sample Info</h2>
+    <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:14px">
+      Fill in the details once — they will be applied to every position you pick in the next step.
+    </div>
+    ${vialForm(_bulkData)}
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">CANCEL</button>
+      <button class="btn btn-success" onclick="_bulkStep2()">NEXT → PICK POSITIONS</button>
+    </div>`);
+}
+
+function _bulkStep2(){
+  // Capture form values — validate name only
+  const data = vialFromForm();
+  if(!data.name){ toast('Sample name required', 'err'); return; }
+  _bulkData     = data;
+  _bulkSelected = new Set();
+  _renderBulkStep2();
+}
+
+function _renderBulkStep2(){
+  const box    = curBox;
+  const vials  = curBox._vials || [];
+  const occupied = new Set(vials.map(v => `${v.row_index},${v.col_index}`));
+
+  // Column labels
+  let colHtml = `<div class="col-labels-row"><div class="col-label-spacer"></div><div style="display:grid;grid-template-columns:repeat(${box.cols},1fr);gap:4px;flex:1">`;
+  for(let c=0;c<box.cols;c++) colHtml += `<div class="col-label">${colLbl(c)}</div>`;
+  colHtml += '</div></div>';
+
+  // Vial grid
+  let gridHtml = '';
+  for(let r=0;r<box.rows;r++){
+    gridHtml += `<div class="row-wrap"><div class="row-label">${rowLbl(r)}</div><div style="display:grid;grid-template-columns:repeat(${box.cols},1fr);gap:4px;flex:1">`;
+    for(let c2=0;c2<box.cols;c2++){
+      const key = `${r},${c2}`;
+      if(occupied.has(key)){
+        gridHtml += `<div class="vial occupied" style="cursor:not-allowed;opacity:.5" title="Occupied">●</div>`;
+      } else {
+        const sel = _bulkSelected.has(key);
+        gridHtml += `<div class="vial${sel?' selected':''}" id="bulk-cell-${r}-${c2}"
+          style="cursor:pointer${sel?';background:rgba(0,229,153,.3);border-color:var(--success)':''}"
+          onclick="_bulkToggle(${r},${c2})"
+          title="${rowLbl(r)}${colLbl(c2)}${sel?' (selected)':' (click to select)'}"></div>`;
+      }
+    }
+    gridHtml += '</div></div>';
+  }
+
+  openModal(`
+    <h2>＋ BULK ADD — Step 2 of 2: Pick Positions</h2>
+    <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:10px">
+      Adding: <strong style="color:var(--accent)">${escHtml(_bulkData.name)}</strong>
+      ${_bulkData.sample_type ? `· ${escHtml(_bulkData.sample_type)}`:''}
+      ${_bulkData.passage     ? `· P${escHtml(_bulkData.passage)}`:''}
+    </div>
+    <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:10px">
+      Click empty cells to select. Click again to deselect.
+      <span id="bulk-count-label" style="color:var(--success);margin-left:8px">0 selected</span>
+    </div>
+    <div class="wf-grid-wrap">
+      <div class="wf-grid-label">● = occupied &nbsp; click empty cell = select</div>
+      ${colHtml}${gridHtml}
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="_renderBulkStep1()">‹ BACK</button>
+      <button class="btn btn-danger" onclick="_bulkClearAll()">✕ CLEAR</button>
+      <button class="btn btn-success" id="btn-bulk-confirm" onclick="_bulkConfirm()" disabled>
+        ＋ ADD <span id="bulk-confirm-count">0</span> TUBES
+      </button>
+    </div>`);
+}
+
+function _bulkToggle(r, c){
+  const key  = `${r},${c}`;
+  const cell = document.getElementById(`bulk-cell-${r}-${c}`);
+  if(!cell) return;
+
+  if(_bulkSelected.has(key)){
+    _bulkSelected.delete(key);
+    cell.classList.remove('selected');
+    cell.style.background    = '';
+    cell.style.borderColor   = '';
+    cell.title = `${rowLbl(r)}${colLbl(c)} (click to select)`;
+  } else {
+    _bulkSelected.add(key);
+    cell.classList.add('selected');
+    cell.style.background    = 'rgba(0,229,153,.3)';
+    cell.style.borderColor   = 'var(--success)';
+    cell.title = `${rowLbl(r)}${colLbl(c)} (selected)`;
+  }
+  _bulkUpdateCount();
+}
+
+function _bulkClearAll(){
+  _bulkSelected.forEach(key => {
+    const [r,c] = key.split(',');
+    const cell  = document.getElementById(`bulk-cell-${r}-${c}`);
+    if(cell){ cell.classList.remove('selected'); cell.style.background=''; cell.style.borderColor=''; }
+  });
+  _bulkSelected.clear();
+  _bulkUpdateCount();
+}
+
+function _bulkUpdateCount(){
+  const n = _bulkSelected.size;
+  const lbl = document.getElementById('bulk-count-label');
+  const cnt = document.getElementById('bulk-confirm-count');
+  const btn = document.getElementById('btn-bulk-confirm');
+  if(lbl) lbl.textContent = `${n} selected`;
+  if(cnt) cnt.textContent = n;
+  if(btn) btn.disabled    = n === 0;
+}
+
+async function _bulkConfirm(){
+  if(_bulkSelected.size === 0){ toast('No positions selected', 'err'); return; }
+  const btn = document.getElementById('btn-bulk-confirm');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Saving…'; }
+
+  let saved = 0, failed = 0;
+  const positions = [..._bulkSelected].map(k => k.split(',').map(Number));
+
+  for(const [r,c] of positions){
+    try{
+      await api('PUT', `/boxes/${curBox.id}/vials/${r}/${c}`, { ..._bulkData, changedBy: getRes() });
+      saved++;
+    }catch(e){
+      failed++;
+      console.warn(`Bulk add failed at ${rowLbl(r)}${colLbl(c)}:`, e.message);
+    }
+  }
+
+  closeModal();
+
+  if(failed === 0){
+    toast(`${saved} tube${saved!==1?'s':''} added`);
+  } else {
+    toast(`${saved} added, ${failed} failed — check console`, 'info');
+  }
+
+  // Refresh the box view
+  const { box, vials } = await api('GET', `/boxes/${curBox.id}/vials`);
+  curBox = box; curBox._vials = vials;
+  renderBox();
+}
+
+// ── BOOT ──────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

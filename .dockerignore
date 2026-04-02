@@ -1,0 +1,89 @@
+# =============================================================================
+# .dockerignore — Files to Exclude from Docker Build Context
+# =============================================================================
+#
+# WHAT IS THE BUILD CONTEXT?
+#   When you run `docker build .`, Docker sends the entire current directory
+#   to the Docker daemon as the "build context". The Dockerfile's COPY
+#   instructions can only copy files that were included in this context.
+#
+# WHY EXCLUDE FILES?
+#   1. Speed: A smaller context transfers faster. node_modules alone can be
+#      hundreds of MB and takes seconds to send.
+#   2. Security: The .env file contains secrets (passwords, API keys).
+#      You NEVER want secrets baked into a Docker image — they'd be readable
+#      by anyone who pulls the image.
+#   3. Correctness: The database file from your development machine should
+#      NOT end up inside the production image. The container uses a volume-
+#      mounted database instead.
+#   4. Reproducibility: Build tools and dev dependencies shouldn't leak
+#      into the production image.
+#
+# SYNTAX (same as .gitignore):
+#   *          → wildcard (any characters)
+#   **         → recursive wildcard (any depth)
+#   /path      → relative to the build context root
+#   !path      → negate — include this file even if a parent pattern excludes it
+# =============================================================================
+
+
+# ── Node.js dependencies ──────────────────────────────────────────────────────
+# node_modules is rebuilt inside the container by `npm ci` in the Dockerfile.
+# Including it would be slow (large) and possibly wrong (native binaries built
+# for your OS won't run in the Alpine Linux container).
+node_modules
+**/node_modules
+
+
+# ── Environment and secrets ───────────────────────────────────────────────────
+# NEVER include .env in a Docker image. It contains passwords and API keys.
+# Environment variables are injected at runtime via docker-compose.yml.
+.env
+.env.*
+!.env.example     # Exception: include the template (it has no real secrets)
+
+
+# ── Database files ────────────────────────────────────────────────────────────
+# The production database lives on a Docker volume, not inside the image.
+*.db
+*.db-shm          # SQLite WAL mode shared memory file
+*.db-wal          # SQLite WAL mode write-ahead log file
+backups/
+
+
+# ── Version control ───────────────────────────────────────────────────────────
+# Git metadata doesn't belong in a container image.
+.git
+.gitignore
+
+
+# ── Development / editor files ────────────────────────────────────────────────
+.DS_Store         # macOS metadata files
+Thumbs.db         # Windows metadata files
+*.log             # Log files from local development
+.vscode/          # VS Code workspace settings
+.idea/            # JetBrains IDE settings
+*.swp             # Vim swap files
+*.swo
+
+
+# ── CI/CD and documentation ───────────────────────────────────────────────────
+# These are useful on the host but waste space in the image.
+.github/
+*.md
+!README.md        # Exception: keep the README in the image (harmless, informative)
+
+
+# ── Test files ────────────────────────────────────────────────────────────────
+test/
+tests/
+*.test.js
+*.spec.js
+coverage/
+
+
+# ── Deploy config (already copied into the image where needed) ────────────────
+# The deploy/ directory is only needed for docker-compose, not inside the container.
+deploy/
+docker-compose*.yml
+Dockerfile*

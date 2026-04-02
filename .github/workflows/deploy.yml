@@ -1,0 +1,311 @@
+# =============================================================================
+# .github/workflows/deploy.yml — CI/CD Pipeline
+# =============================================================================
+#
+# WHAT IS CI/CD?
+#   CI = Continuous Integration: automatically test every code change
+#   CD = Continuous Deployment: automatically ship passing code to production
+#
+#   Without CI/CD you'd manually:
+#     1. Pull the latest code onto the server
+#     2. Run npm install
+#     3. Restart the server
+#     4. Pray nothing broke
+#
+#   With CI/CD, pushing a git commit triggers all of that automatically,
+#   plus automated tests catch problems before they reach your users.
+#
+# WHAT IS GITHUB ACTIONS?
+#   GitHub Actions is a free CI/CD platform built into GitHub. You define
+#   "workflows" in YAML files stored in .github/workflows/. GitHub runs
+#   them on its own servers (called "runners") whenever the trigger fires.
+#
+# HOW THIS PIPELINE WORKS
+#   Trigger: push to the "main" branch (or a pull request targeting main)
+#
+#   Job 1 — test:   Runs on every push/PR to catch bugs early
+#     - Installs dependencies
+#     - Runs the test suite (linting + unit tests)
+#
+#   Job 2 — build:  Runs only on push to main (not PRs)
+#     - Builds and pushes a Docker image to GitHub Container Registry (GHCR)
+#     - Tags the image with the git commit SHA for traceability
+#
+#   Job 3 — deploy: Runs only after build succeeds, only on main
+#     - SSHs into the production server
+#     - Pulls the new image
+#     - Runs docker compose up to replace the running container
+#     - Verifies the health check passes before finishing
+#
+# SETUP REQUIRED (one-time, in your GitHub repository settings)
+#   Go to: Repository → Settings → Secrets and Variables → Actions → New secret
+#
+#   DEPLOY_HOST       IP address or hostname of your production server
+#   DEPLOY_USER       SSH username (e.g., ubuntu, deploy, root)
+#   DEPLOY_SSH_KEY    Private SSH key (the full contents of ~/.ssh/id_ed25519)
+#   DEPLOY_PATH       Absolute path to the app on the server (e.g., /opt/cryovault)
+#
+#   GHCR is GitHub's container registry — no extra credentials needed,
+#   GitHub Actions automatically has permission to push images there.
+#
+# COST
+#   GitHub Actions is free for public repositories and includes 2,000 minutes/
+#   month free for private repositories. This pipeline typically uses < 5 minutes
+#   per deployment.
+# =============================================================================
+
+name: CI / CD Pipeline
+
+# ── Trigger conditions ────────────────────────────────────────────────────────
+# "on" defines when this workflow runs.
+on:
+  push:
+    branches:
+      - main          # Run full pipeline when code is merged to main
+  pull_request:
+    branches:
+      - main          # Run tests only when a PR targets main (no deploy)
+
+# ── Shared environment ────────────────────────────────────────────────────────
+# Variables available to all jobs and steps in this workflow.
+env:
+  # ghcr.io is GitHub Container Registry. The image name follows:
+  # ghcr.io/GITHUB_USERNAME/REPO_NAME:TAG
+  # ${{ github.repository }} resolves to "username/repo-name" automatically.
+  IMAGE_NAME: ghcr.io/${{ github.repository }}/cryovault
+  NODE_VERSION: "20"    # Pin Node.js version for reproducibility
+
+
+# =============================================================================
+# JOB 1: Test
+# =============================================================================
+# Runs the test suite on every push and every pull request.
+# PRs can't merge until this passes (if you enable branch protection rules).
+# =============================================================================
+jobs:
+  test:
+    name: Lint & Test
+    # "ubuntu-latest" is a free GitHub-hosted runner with Node, npm, Docker
+    # pre-installed. It spins up fresh for every run (clean environment).
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the repository code onto the runner
+      # Without this, the runner has no files to work with.
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Install the specified version of Node.js
+      # "uses" references a pre-built Action from the GitHub Actions marketplace.
+      # This saves us from writing `curl https://nodejs.org/... | tar xz ...` ourselves.
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          # Cache the npm package download cache between runs.
+          # If package.json hasn't changed, the next run reuses cached packages
+          # instead of re-downloading from the internet — saves ~30 seconds.
+          cache: "npm"
+
+      # Step 3: Install dependencies
+      # `npm ci` (clean install) is preferred over `npm install` in CI because:
+      #   - It's faster (doesn't resolve versions, uses package-lock.json exactly)
+      #   - It fails if package-lock.json is out of sync with package.json
+      #   - It always installs fresh (no leftover cached packages causing drift)
+      - name: Install dependencies
+        run: npm ci
+
+      # Step 4: Run the linter
+      # ESLint statically analyses code for common bugs and style violations
+      # without running it. Catches things like undefined variables, unused
+      # imports, and == vs === mistakes before they reach production.
+      # (Requires eslint to be in devDependencies — add it when you have tests)
+      # - name: Lint
+      #   run: npm run lint
+
+      # Step 5: Run tests
+      # (Uncomment when you add a test suite with Jest, Mocha, etc.)
+      # Tests verify that your API endpoints behave correctly — e.g., that
+      # POST /api/tanks/:id/racks returns 201 and the correct JSON shape.
+      # - name: Run tests
+      #   run: npm test
+      #   env:
+      #     NODE_ENV: test
+      #     DB_PATH: ":memory:"    # Use an in-memory SQLite DB for tests (fast, isolated)
+
+      # Placeholder step while tests aren't yet written
+      - name: Verify server starts
+        run: |
+          # Start the server in the background, wait for it to be ready,
+          # then check the health endpoint, then kill the server.
+          DB_PATH=./test.db node server.js &
+          SERVER_PID=$!
+          sleep 3
+          curl -sf http://localhost:3000/api/health && echo "✓ Health check passed"
+          kill $SERVER_PID
+          rm -f ./test.db
+
+
+  # ===========================================================================
+  # JOB 2: Build Docker Image
+  # ===========================================================================
+  # Only runs when code is pushed/merged to main — NOT on pull requests.
+  # We don't want to build and push an image for every PR branch.
+  # ===========================================================================
+  build:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    # "needs: test" means this job only starts if the "test" job passed.
+    # If tests fail, we stop here — no image is built, no deployment happens.
+    needs: test
+
+    # Only run on pushes to main, not on pull_request events
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    # Permissions needed to push images to GitHub Container Registry
+    permissions:
+      contents: read
+      packages: write    # Required to push to ghcr.io
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Log in to GitHub Container Registry using a token auto-generated by
+      # GitHub Actions. GITHUB_TOKEN is automatically available — no setup needed.
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}         # Your GitHub username
+          password: ${{ secrets.GITHUB_TOKEN }} # Auto-generated, no setup needed
+
+      # Set up Docker Buildx — an extended build tool with better caching
+      # and the ability to build multi-platform images (arm64 for M1 Macs, etc.)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Generate image tags. We tag the image with:
+      #   1. The full git commit SHA (e.g., sha-a1b2c3d)
+      #      → Precise: you always know exactly which code is running
+      #   2. "latest"
+      #      → Convenient: `docker pull image:latest` always gets newest
+      #
+      # In a more mature pipeline you might also tag with a semver release number.
+      - name: Extract Docker metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      # Build the Docker image and push it to GHCR.
+      # --cache-from / --cache-to reuses build layers from previous runs,
+      # making the build significantly faster when dependencies haven't changed.
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true                          # Actually push to the registry
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha               # Read cache from GitHub Actions cache
+          cache-to: type=gha,mode=max        # Write cache back after build
+
+
+  # ===========================================================================
+  # JOB 3: Deploy to Production
+  # ===========================================================================
+  # SSHs into the production server and updates the running containers.
+  # Only runs after the build job succeeds, only on main.
+  # ===========================================================================
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build    # Only deploy if build succeeded (image is available)
+
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    # "environment" links this job to a GitHub Environment (Settings → Environments).
+    # This lets you:
+    #   - Require manual approval before deploying ("protection rules")
+    #   - See deployment history on the repository page
+    #   - Scope secrets to specific environments (prod vs staging)
+    environment:
+      name: production
+      url: ${{ vars.APP_URL }}    # Shown as a link in the GitHub Actions UI
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Copy deployment files to the server using SCP (Secure Copy Protocol).
+      # We only copy the files needed to run the app — not source code.
+      # The source code is baked into the Docker image already.
+      - name: Copy compose files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}      # IP/hostname of your server
+          username: ${{ secrets.DEPLOY_USER }}  # SSH username
+          key: ${{ secrets.DEPLOY_SSH_KEY }}    # Private SSH key (full contents)
+          source: "docker-compose.yml,deploy/nginx/nginx.conf,.env.example"
+          target: ${{ secrets.DEPLOY_PATH }}    # e.g., /opt/cryovault
+
+      # SSH into the server and run the deployment commands.
+      # Each line is a separate shell command executed sequentially.
+      - name: SSH and deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # script runs these commands on the remote server:
+          script: |
+            # Navigate to the application directory
+            cd ${{ secrets.DEPLOY_PATH }}
+
+            # Pull the latest image from the registry.
+            # The image tag in docker-compose.yml determines which version is pulled.
+            # In production, pin to a specific SHA tag for safety:
+            #   image: ghcr.io/yourorg/cryovault:sha-${{ github.sha }}
+            docker compose pull app
+
+            # Recreate the app container with the new image.
+            # --no-deps: don't restart nginx (it doesn't need updating)
+            # -d: run in detached mode (background)
+            docker compose up -d --no-deps app
+
+            # Wait for the health check to pass (up to 30 seconds)
+            # This ensures the new container is healthy before we declare success.
+            echo "Waiting for health check..."
+            for i in $(seq 1 10); do
+              if docker compose exec -T app wget -qO- http://localhost:3000/api/health > /dev/null 2>&1; then
+                echo "✓ Health check passed"
+                break
+              fi
+              if [ $i -eq 10 ]; then
+                echo "✗ Health check failed after 30 seconds"
+                # Show recent logs to help diagnose the failure
+                docker compose logs --tail=50 app
+                exit 1
+              fi
+              echo "Attempt $i/10 — waiting 3s..."
+              sleep 3
+            done
+
+            # Clean up old Docker images to reclaim disk space.
+            # "dangling" images are untagged layers left over from previous builds.
+            docker image prune -f
+
+            echo "Deployment complete ✓"
+
+      # Post a deployment summary in the GitHub Actions run log
+      - name: Deployment summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time:** $(date -u +"%Y-%m-%d %H:%M UTC")" >> $GITHUB_STEP_SUMMARY
