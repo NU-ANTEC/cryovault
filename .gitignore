@@ -22,6 +22,7 @@
 .env
 .env.local
 .env.*.local
+docker-compose.yml
 
 # ── Node.js ───────────────────────────────────────────────────────────────────
 node_modules/        # Install with `npm install` — never commit this
