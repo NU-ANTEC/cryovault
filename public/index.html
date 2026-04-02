@@ -1143,7 +1143,7 @@ async function renderRack(){
   try{
     const{rack,slots}=await api('GET',`/racks/${curRack.id}/slots`);curRack=rack;
     const occupied=slots.filter(s=>s.occupied).length,p=rack.capacity?Math.round(occupied/rack.capacity*100):0;
-    let h=`<div class="section-header"><div class="section-left"><div class="section-title">${escHtml(rack.name)}</div><div class="section-sub">RACK · ${escHtml(rack.position||'—')} · ${rack.capacity} slots · ${occupied} occupied · ${p}% full</div></div><div class="section-right"><button class="btn btn-success" onclick="openAddBox('${rack.id}',${rack.capacity})">＋ PLACE BOX</button><button class="btn" onclick="openEditRack('${rack.id}','${escHtml(rack.name)}','${escHtml(rack.position||'')}',${rack.capacity},'${escHtml(rack.notes||'')}')">✎ EDIT RACK</button><button class="btn btn-danger" onclick="confirmDeleteRack('${rack.id}','${escHtml(rack.name)}')">✕ DELETE RACK</button></div></div><div class="rack-legend"><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--accent2)"></div>Occupied</div><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--surface2);border:1px dashed var(--border)"></div>Empty</div><span style="margin-left:auto;color:var(--muted)">↑ slot 1 = top of rack</span></div><div class="rack-top-label">▲ TOP OF RACK</div><div class="rack-column">`;
+    let h=`<div class="section-header"><div class="section-left"><div class="section-title">${escHtml(rack.name)}</div><div class="section-sub">RACK · ${escHtml(rack.position||'—')} · ${rack.capacity} slots · ${occupied} occupied · ${p}% full</div></div><div class="section-right"><button class="btn btn-success" onclick="openAddBox('${rack.id}',${rack.capacity})">＋ PLACE BOX</button><button class="btn" onclick="openAutoFillRack('${rack.id}',${rack.capacity})">⊞ AUTO-FILL</button><button class="btn" onclick="openEditRack('${rack.id}','${escHtml(rack.name)}','${escHtml(rack.position||'')}',${rack.capacity},'${escHtml(rack.notes||'')}')">✎ EDIT RACK</button><button class="btn btn-danger" onclick="confirmDeleteRack('${rack.id}','${escHtml(rack.name)}')">✕ DELETE RACK</button></div></div><div class="rack-legend"><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--accent2)"></div>Occupied</div><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--surface2);border:1px dashed var(--border)"></div>Empty</div><span style="margin-left:auto;color:var(--muted)">↑ slot 1 = top of rack</span></div><div class="rack-top-label">▲ TOP OF RACK</div><div class="rack-column">`;
     for(const slot of slots){
       if(slot.occupied){
         const b=slot.box,cap=b.rows*b.cols,vc=b.vial_count||0,bp=cap?Math.round(vc/cap*100):0,bcl=fillCls(bp);
@@ -2817,6 +2817,125 @@ async function _bulkConfirm(){
   const { box, vials } = await api('GET', `/boxes/${curBox.id}/vials`);
   curBox = box; curBox._vials = vials;
   renderBox();
+}
+
+// ============================================================================
+// AUTO-FILL RACK — place boxes in all empty slots with sequential names
+// ============================================================================
+// Opens a modal where the operator sets:
+//   • Name prefix  (default: BOX)
+//   • Grid format  (same options as single add)
+//   • Starting number (auto-detected from existing boxes, can override)
+// Then creates boxes in every empty slot from top to bottom.
+// ============================================================================
+
+async function openAutoFillRack(rackId, capacity){
+  const boxes    = await api('GET', `/racks/${rackId}/boxes`).catch(()=>[]);
+  const occupied = new Set(boxes.map(b => b.slot_position));
+  const freeSlots = [];
+  for(let i = 1; i <= capacity; i++) if(!occupied.has(i)) freeSlots.push(i);
+
+  if(!freeSlots.length){ toast('All slots are already occupied','err'); return; }
+
+  // Detect the highest existing BOX-NNN number so we can continue the sequence
+  const existingNums = boxes
+    .map(b => { const m = b.name.match(/(\d+)$/); return m ? parseInt(m[1],10) : 0; })
+    .filter(n => n > 0);
+  const nextNum = existingNums.length ? Math.max(...existingNums) + 1 : 1;
+
+  openModal(`
+    <h2>⊞ AUTO-FILL RACK</h2>
+    <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.8">
+      ${freeSlots.length} empty slot${freeSlots.length!==1?'s':''} will be filled
+      (slot${freeSlots.length!==1?'s':''} ${freeSlots.join(', ')}).
+      Boxes are named sequentially from top to bottom.
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Name Prefix</label>
+        <input class="form-input" id="af-prefix" value="BOX" placeholder="BOX"/>
+        <div class="form-hint">e.g. "BOX" → BOX-001, BOX-002…</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Start Number</label>
+        <input class="form-input" id="af-start" type="number" min="1" value="${nextNum}"/>
+        <div class="form-hint">Next available: ${nextNum}</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Number padding</label>
+      <select class="form-select" id="af-pad">
+        <option value="3">3 digits — BOX-001</option>
+        <option value="2">2 digits — BOX-01</option>
+        <option value="1">No padding — BOX-1</option>
+      </select>
+    </div>
+    ${boxSizeFields(9, 9)}
+    <div style="font-family:var(--font-mono);font-size:11px;background:var(--surface2);border:1px solid var(--border);padding:10px 12px;border-radius:var(--radius);margin-top:12px">
+      <span style="color:var(--muted)">Preview: </span>
+      <span id="af-preview" style="color:var(--accent)"></span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">CANCEL</button>
+      <button class="btn btn-success" onclick="doAutoFill('${rackId}')">⊞ FILL ${freeSlots.length} SLOT${freeSlots.length!==1?'S':''}</button>
+    </div>`);
+
+  // Live preview updater
+  function updatePreview(){
+    const prefix = document.getElementById('af-prefix')?.value.trim() || 'BOX';
+    const start  = parseInt(document.getElementById('af-start')?.value, 10) || 1;
+    const pad    = parseInt(document.getElementById('af-pad')?.value, 10) || 3;
+    const fmt    = n => `${prefix}-${String(n).padStart(pad, '0')}`;
+    const names  = freeSlots.slice(0, 3).map((_,i) => fmt(start + i));
+    if(freeSlots.length > 3) names.push('…');
+    const el = document.getElementById('af-preview');
+    if(el) el.textContent = names.join(', ');
+  }
+  updatePreview();
+  ['af-prefix','af-start','af-pad'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', updatePreview);
+  });
+  document.getElementById('af-pad')?.addEventListener('change', updatePreview);
+}
+
+async function doAutoFill(rackId){
+  const prefix   = document.getElementById('af-prefix')?.value.trim() || 'BOX';
+  const startNum = parseInt(document.getElementById('af-start')?.value, 10) || 1;
+  const pad      = parseInt(document.getElementById('af-pad')?.value, 10) || 3;
+  const { rows, cols } = getBoxDims();
+  const fmt = n => `${prefix}-${String(n).padStart(pad, '0')}`;
+
+  // Get current empty slots at execute time (may have changed since modal opened)
+  const rack     = await api('GET', `/racks/${rackId}`);
+  const boxes    = await api('GET', `/racks/${rackId}/boxes`).catch(()=>[]);
+  const occupied = new Set(boxes.map(b => b.slot_position));
+  const freeSlots = [];
+  for(let i = 1; i <= rack.capacity; i++) if(!occupied.has(i)) freeSlots.push(i);
+
+  if(!freeSlots.length){ closeModal(); toast('No empty slots — rack is full','err'); return; }
+
+  closeModal();
+  showLoading();
+
+  let created = 0, failed = 0;
+  for(let i = 0; i < freeSlots.length; i++){
+    const slot = freeSlots[i];
+    const name = fmt(startNum + i);
+    try{
+      await api('POST', `/racks/${rackId}/boxes`, {
+        name, slot_position: slot, rows, cols,
+        qr_code: null, notes: '', changedBy: getRes()
+      });
+      created++;
+    }catch(e){
+      console.warn(`Auto-fill: failed slot ${slot} (${name}):`, e.message);
+      failed++;
+    }
+  }
+
+  hideLoading();
+  toast(`Auto-fill complete: ${created} box${created!==1?'es':''} created${failed?`, ${failed} failed`:''}`);
+  await renderRack();
 }
 
 // ── BOOT ──────────────────────────────────────────────────────────────────────
