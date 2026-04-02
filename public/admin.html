@@ -236,28 +236,49 @@ header{
     <div class="section-sep">Data Import</div>
 
     <div class="card">
-      <div class="card-title">Import CSV</div>
+      <div class="card-title">Import Data</div>
       <div class="card-desc">
-        Upload a CSV file exported from CryoVault or formatted with the same columns.
-        Required columns: <code style="color:var(--accent)">rack_name, box_name, position, name</code>.<br>
-        The file is first analysed for conflicts. You review every collision
-        before anything is written to the database.
+        Import from a <strong style="color:var(--text)">CSV</strong> file (vials only, with conflict review)
+        or a <strong style="color:var(--text)">JSON</strong> snapshot (full inventory, exported from CryoVault).
+      </div>
+
+      <!-- Format selector -->
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button class="btn" id="fmt-btn-csv" onclick="setImportFmt('csv')" style="border-color:var(--accent);color:var(--accent)">CSV</button>
+        <button class="btn" id="fmt-btn-json" onclick="setImportFmt('json')">JSON</button>
       </div>
 
       <!-- Step 1: File picker -->
       <div id="import-step-upload">
+        <div id="import-csv-desc" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.8">
+          Required columns: <code style="color:var(--accent)">rack_name, box_name, position, name</code><br>
+          The file is analysed for conflicts before anything is written.
+        </div>
+        <div id="import-json-desc" style="display:none;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.8">
+          Upload a full JSON snapshot exported from CryoVault.<br>
+          <strong style="color:var(--warn)">Merge</strong> adds new items, skips existing names.<br>
+          <strong style="color:var(--danger)">Replace</strong> wipes all current data first.
+          <div style="margin-top:8px">
+            <label style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-right:8px">Mode:</label>
+            <select id="import-json-mode" style="font-family:var(--mono);font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:var(--radius)">
+              <option value="merge">Merge — keep existing, add new</option>
+              <option value="replace">Replace — wipe and reimport</option>
+            </select>
+          </div>
+        </div>
+
         <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">
           <div style="flex:1;min-width:200px">
-            <label style="font-family:var(--mono);font-size:10px;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:1px">CSV File</label>
+            <label style="font-family:var(--mono);font-size:10px;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:1px" id="import-file-label">CSV File</label>
             <input type="file" id="import-file" accept=".csv"
               style="font-family:var(--mono);font-size:11px;color:var(--text);background:var(--surface2);border:1px solid var(--border);padding:8px;width:100%;border-radius:var(--radius)"/>
           </div>
-          <button class="btn btn-success" onclick="previewImport()">→ ANALYSE</button>
+          <button class="btn btn-success" id="import-action-btn" onclick="handleImport()">→ ANALYSE</button>
         </div>
         <div id="import-upload-hint" style="font-family:var(--mono);font-size:10px;color:var(--muted)"></div>
       </div>
 
-      <!-- Step 2: Conflict review (hidden until analysis completes) -->
+      <!-- Step 2: CSV conflict review (hidden until analysis completes) -->
       <div id="import-step-review" style="display:none;margin-top:16px"></div>
     </div>
   </div>
@@ -535,12 +556,78 @@ function applyTheme(){
 }
 
 // =============================================================================
-// CSV IMPORT — two-phase: analyse then execute with per-row decisions
+// =============================================================================
+// DATA IMPORT — CSV (two-phase with conflict review) + JSON (direct)
 // =============================================================================
 
-let _importCsv       = null;   // raw CSV text, kept for phase 2
-let _importRows      = null;   // preview rows from server
-let _importDecisions = {};     // { rowNum: 'skip' | 'overwrite' }
+let _importCsv       = null;
+let _importRows      = null;
+let _importDecisions = {};
+let _importFmt       = 'csv';  // 'csv' | 'json'
+
+function setImportFmt(fmt) {
+  _importFmt = fmt;
+  resetImport();
+
+  // Toggle button styles
+  const csvBtn  = document.getElementById('fmt-btn-csv');
+  const jsonBtn = document.getElementById('fmt-btn-json');
+  if(csvBtn)  { csvBtn.style.borderColor  = fmt==='csv'  ? 'var(--accent)' : ''; csvBtn.style.color  = fmt==='csv'  ? 'var(--accent)' : ''; }
+  if(jsonBtn) { jsonBtn.style.borderColor = fmt==='json' ? 'var(--accent)' : ''; jsonBtn.style.color = fmt==='json' ? 'var(--accent)' : ''; }
+
+  // Toggle descriptions and file accept
+  document.getElementById('import-csv-desc').style.display  = fmt==='csv'  ? 'block' : 'none';
+  document.getElementById('import-json-desc').style.display = fmt==='json' ? 'block' : 'none';
+  document.getElementById('import-file').accept = fmt==='csv' ? '.csv' : '.json';
+  document.getElementById('import-file-label').textContent  = fmt==='csv'  ? 'CSV File' : 'JSON File';
+  document.getElementById('import-action-btn').textContent  = fmt==='csv'  ? '→ ANALYSE' : '↑ IMPORT';
+}
+
+async function handleImport() {
+  if (_importFmt === 'json') {
+    await importJson();
+  } else {
+    await previewImport();
+  }
+}
+
+async function importJson() {
+  const fileEl = document.getElementById('import-file');
+  const hint   = document.getElementById('import-upload-hint');
+  const btn    = document.getElementById('import-action-btn');
+
+  if (!fileEl.files[0]) {
+    hint.style.color = 'var(--danger)';
+    hint.textContent = 'Please select a JSON file first.';
+    return;
+  }
+
+  const mode = document.getElementById('import-json-mode').value;
+  if (mode === 'replace') {
+    if (!confirm('⚠ Replace mode will DELETE ALL current data and reimport from this file. Are you sure?')) return;
+  }
+
+  hint.style.color = 'var(--muted)';
+  hint.textContent = 'Importing…';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Importing…'; }
+
+  try {
+    const text = await fileEl.files[0].text();
+    const data = JSON.parse(text);
+    const result = await api('POST', '/import', { data, mode, changedBy: 'admin-import' });
+    const s = result.stats || {};
+    hint.style.color = 'var(--success)';
+    hint.textContent = `✓ Done — ${s.racks||0} racks, ${s.boxes||0} boxes, ${s.vials||0} vials imported` +
+                       (s.skipped ? `, ${s.skipped} skipped` : '');
+    toast('JSON import complete');
+    if (btn) { btn.textContent = '✓ DONE'; btn.disabled = false; }
+  } catch(e) {
+    hint.style.color = 'var(--danger)';
+    hint.textContent = 'Import failed: ' + e.message;
+    if (btn) { btn.disabled = false; btn.textContent = '↑ IMPORT'; }
+    toast('JSON import failed: ' + e.message, 'err');
+  }
+}
 
 function statusLabel(status) {
   const map = {
@@ -562,7 +649,7 @@ async function previewImport() {
 
   if (!fileEl.files[0]) {
     hint.style.color = 'var(--danger)';
-    hint.textContent = 'Please select a CSV file first.';
+    hint.textContent = 'Please select a file first.';
     return;
   }
 
@@ -758,10 +845,14 @@ async function executeImport() {
 
 function resetImport() {
   _importCsv = null; _importRows = null; _importDecisions = {};
-  document.getElementById('import-file').value = '';
-  document.getElementById('import-upload-hint').textContent = '';
-  document.getElementById('import-step-review').style.display = 'none';
-  document.getElementById('import-step-review').innerHTML = '';
+  const f = document.getElementById('import-file');
+  if (f) f.value = '';
+  const h = document.getElementById('import-upload-hint');
+  if (h) { h.textContent = ''; h.style.color = 'var(--muted)'; }
+  const r = document.getElementById('import-step-review');
+  if (r) { r.style.display = 'none'; r.innerHTML = ''; }
+  const btn = document.getElementById('import-action-btn');
+  if (btn) { btn.disabled = false; btn.textContent = _importFmt === 'csv' ? '→ ANALYSE' : '↑ IMPORT'; }
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
