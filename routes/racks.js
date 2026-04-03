@@ -262,8 +262,8 @@ router.get('/racks/:id/slots', (req, res) => {
       b.*,
       COUNT(v.id) AS vial_count
     FROM      boxes b
-    LEFT JOIN vials v ON v.box_id = b.id
-    WHERE     b.rack_id = ?
+    LEFT JOIN vials v ON v.box_id = b.id AND v.archived_at IS NULL
+    WHERE     b.rack_id = ? AND b.archived_at IS NULL
     GROUP BY  b.id
     ORDER BY  b.slot_position
   `).all(rack.id);

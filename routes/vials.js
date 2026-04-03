@@ -94,90 +94,94 @@ router.put('/boxes/:boxId/vials/:row/:col', (req, res) => {
     return res.status(400).json({ error: 'row and col must be integers' });
   }
 
-  // Fetch the parent box to:
-  //   a) Confirm it exists
-  //   b) Validate that the position is within the grid bounds
+  // Fetch the parent box
   const box = db.prepare('SELECT * FROM boxes WHERE id = ?').get(req.params.boxId);
   if (!box) return res.status(404).json({ error: 'Box not found' });
 
-  // Bounds check: row must be 0 ≤ row < box.rows, col must be 0 ≤ col < box.cols
   if (row < 0 || row >= box.rows || col < 0 || col >= box.cols) {
     return res.status(400).json({
       error: `Position (${row}, ${col}) is out of bounds for a ${box.rows}×${box.cols} box`
     });
   }
 
-  // Check if a vial already exists at this position (upsert logic)
-  const existing = db.prepare(`
-    SELECT * FROM vials
-    WHERE box_id = ? AND row_index = ? AND col_index = ?
-  `).get(req.params.boxId, row, col);
-
+  // Wrap the check-then-write in a transaction so no other request can
+  // insert at the same position between the SELECT and the INSERT.
+  // SQLite serialises writes, so the transaction is the race condition guard.
   const now = new Date().toISOString();
   let vial;
 
-  if (existing) {
-    // ── UPDATE PATH ──────────────────────────────────────────────────────────
-    // A vial already occupies this position — update its fields.
-    db.prepare(`
-      UPDATE vials
-      SET name = ?, sample_type = ?, date_stored = ?, volume = ?,
-          concentration = ?, researcher = ?, qr_code = ?, passage = ?, notes = ?,
-          updated_at = ?
-      WHERE box_id = ? AND row_index = ? AND col_index = ?
-    `).run(
-      name.trim(), sample_type, date_stored, volume,
-      concentration, researcher, qr_code || null, passage || null, notes,
-      now,
-      req.params.boxId, row, col
-    );
+  try {
+    const upsert = db.transaction(() => {
+      const existing = db.prepare(`
+        SELECT * FROM vials
+        WHERE box_id = ? AND row_index = ? AND col_index = ?
+      `).get(req.params.boxId, row, col);
 
-    vial = db.prepare(`
-      SELECT * FROM vials
-      WHERE box_id = ? AND row_index = ? AND col_index = ?
-    `).get(req.params.boxId, row, col);
+      if (existing) {
+        // UPDATE — vial already occupies this position
+        db.prepare(`
+          UPDATE vials
+          SET name = ?, sample_type = ?, date_stored = ?, volume = ?,
+              concentration = ?, researcher = ?, qr_code = ?, passage = ?, notes = ?,
+              updated_at = ?
+          WHERE box_id = ? AND row_index = ? AND col_index = ?
+        `).run(
+          name.trim(), sample_type, date_stored, volume,
+          concentration, researcher, qr_code || null, passage || null, notes,
+          now,
+          req.params.boxId, row, col
+        );
 
-    logAudit({
-      entityType: 'vial',
-      entityId:   vial.id,
-      entityName: vial.name,
-      action:     'update',
-      changedBy,
-      oldData:    existing,
-      newData:    vial,
-      context:    { box_id: req.params.boxId, row, col }
+        const updated = db.prepare(`
+          SELECT * FROM vials WHERE box_id = ? AND row_index = ? AND col_index = ?
+        `).get(req.params.boxId, row, col);
+
+        logAudit({
+          entityType: 'vial', entityId: updated.id, entityName: updated.name,
+          action: 'update', changedBy, oldData: existing, newData: updated,
+          context: { box_id: req.params.boxId, row, col }
+        });
+
+        return updated;
+
+      } else {
+        // INSERT — position is empty
+        const id = uuidv4();
+        db.prepare(`
+          INSERT INTO vials
+            (id, box_id, row_index, col_index, name, sample_type,
+             date_stored, volume, concentration, researcher, qr_code, passage, notes,
+             created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          id, req.params.boxId, row, col, name.trim(), sample_type,
+          date_stored, volume, concentration, researcher,
+          qr_code || null, passage || null, notes,
+          now, now
+        );
+
+        const created = db.prepare('SELECT * FROM vials WHERE id = ?').get(id);
+
+        logAudit({
+          entityType: 'vial', entityId: id, entityName: created.name,
+          action: 'create', changedBy, newData: created,
+          context: { box_id: req.params.boxId, row, col }
+        });
+
+        return created;
+      }
     });
 
-  } else {
-    // ── INSERT PATH ──────────────────────────────────────────────────────────
-    // No vial at this position — create a new one.
-    const id = uuidv4();
-    db.prepare(`
-      INSERT INTO vials
-        (id, box_id, row_index, col_index, name, sample_type,
-         date_stored, volume, concentration, researcher, qr_code, passage, notes,
-         created_at, updated_at)
-      VALUES
-        (?,  ?,      ?,         ?,         ?,    ?,
-         ?,           ?,      ?,             ?,          ?,       ?,
-         ?,          ?,          ?)
-    `).run(
-      id, req.params.boxId, row, col, name.trim(), sample_type,
-      date_stored, volume, concentration, researcher, qr_code || null, passage || null, notes,
-      now, now
-    );
+    vial = upsert();
 
-    vial = db.prepare('SELECT * FROM vials WHERE id = ?').get(id);
-
-    logAudit({
-      entityType: 'vial',
-      entityId:   id,
-      entityName: vial.name,
-      action:     'create',
-      changedBy,
-      newData:    vial,
-      context:    { box_id: req.params.boxId, row, col }
-    });
+  } catch (err) {
+    // UNIQUE constraint violation = two concurrent inserts to the same position
+    if (err.message && err.message.includes('UNIQUE')) {
+      return res.status(409).json({
+        error: `Position (${row}, ${col}) was just occupied by another request — please refresh and try again`
+      });
+    }
+    throw err;
   }
 
   res.json(vial);

@@ -165,33 +165,48 @@ router.post('/racks/:rackId/boxes', (req, res) => {
   const dimError = validateGridDims(rows, cols);
   if (dimError) return res.status(400).json({ error: dimError });
 
-  // Validate the slot (range + occupancy)
-  const slotCheck = validateSlot(req.params.rackId, slot_position);
-  if (!slotCheck.ok) return res.status(slotCheck.status).json({ error: slotCheck.error });
-
   const id  = uuidv4();
   const now = new Date().toISOString();
 
-  db.prepare(`
-    INSERT INTO boxes
-      (id, rack_id, name, slot_position, rows, cols, qr_code, notes, created_at, updated_at)
-    VALUES
-      (?,  ?,       ?,    ?,             ?,    ?,    ?,       ?,     ?,          ?)
-  `).run(
-    id, req.params.rackId, name.trim(), slotCheck.pos,
-    parseInt(rows, 10), parseInt(cols, 10),
-    qr_code || null, notes, now, now
-  );
+  // Wrap validate-then-insert in a transaction so concurrent requests to the
+  // same slot cannot both pass the occupancy check and both insert.
+  try {
+    const insert = db.transaction(() => {
+      const slotCheck = validateSlot(req.params.rackId, slot_position);
+      if (!slotCheck.ok) return { error: slotCheck.error, status: slotCheck.status };
 
-  const box = db.prepare('SELECT * FROM boxes WHERE id = ?').get(id);
+      db.prepare(`
+        INSERT INTO boxes
+          (id, rack_id, name, slot_position, rows, cols, qr_code, notes, created_at, updated_at)
+        VALUES
+          (?,  ?,       ?,    ?,             ?,    ?,    ?,       ?,     ?,          ?)
+      `).run(
+        id, req.params.rackId, name.trim(), slotCheck.pos,
+        parseInt(rows, 10), parseInt(cols, 10),
+        qr_code || null, notes, now, now
+      );
 
-  logAudit({
-    entityType: 'box', entityId: id, entityName: box.name,
-    action: 'create', changedBy, newData: box,
-    context: { rack_id: req.params.rackId, slot_position: slotCheck.pos }
-  });
+      return { ok: true, pos: slotCheck.pos };
+    });
 
-  res.status(201).json(box);
+    const result = insert();
+    if (result.error) return res.status(result.status).json({ error: result.error });
+
+    const box = db.prepare('SELECT * FROM boxes WHERE id = ?').get(id);
+    logAudit({
+      entityType: 'box', entityId: id, entityName: box.name,
+      action: 'create', changedBy, newData: box,
+      context: { rack_id: req.params.rackId, slot_position: result.pos }
+    });
+
+    res.status(201).json(box);
+
+  } catch (err) {
+    if (err.message && err.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: 'That slot was just taken by another request — please refresh and try again' });
+    }
+    throw err;
+  }
 });
 
 

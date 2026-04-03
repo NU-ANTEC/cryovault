@@ -43,6 +43,14 @@ console.log(`[db] Connected to ${DB_PATH}`);
 if (process.env.DB_WAL_MODE !== 'false') {
   db.pragma('journal_mode = WAL');
 }
+
+// busy_timeout: if the database is locked by a write, wait up to 5 seconds
+// before returning SQLITE_BUSY. Without this, concurrent requests fail
+// immediately with "database is locked".
+db.pragma('busy_timeout = 5000');
+
+// Recommended WAL settings for reliability
+db.pragma('synchronous = NORMAL');  // safe with WAL, faster than FULL
 db.pragma('foreign_keys = ON');
 
 
