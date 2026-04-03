@@ -360,6 +360,7 @@ header{
 .section-left .section-sub{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:2px}
 .section-notes{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:5px;white-space:pre-wrap;line-height:1.6;border-left:2px solid var(--border);padding-left:8px}
 .section-right{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.hdr-sep{width:1px;height:22px;background:var(--border);flex-shrink:0;margin:0 2px}
 
 /* ── Card grid ────────────────────────────────────────────────────────────── */
 .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:var(--space-sm)}
@@ -996,6 +997,8 @@ async function renderTankList(){
       </div>
       <div class="section-right">
         <button class="btn btn-success" onclick="openAddTank()">＋ ADD TANK</button>
+        <div class="hdr-sep"></div>
+        <button class="btn btn-qr" onclick="openVialQRScan()">▦ SCAN CODE</button>
       </div>
     </div>`;
 
@@ -1124,8 +1127,9 @@ async function renderHome(){
     let h=`<div class="section-header">
       <div class="section-left"><div class="section-title">Racks</div><div class="section-sub">${racks.length} rack(s) in ${escHtml(curTank.name)}</div></div>
       <div class="section-right">
-        <button class="btn btn-qr" onclick="openVialQRScan()">▦ SCAN VIAL QR</button>
         <button class="btn btn-success" onclick="openAddRack()">＋ ADD RACK</button>
+        <div class="hdr-sep"></div>
+        <button class="btn btn-qr" onclick="openVialQRScan()">▦ SCAN CODE</button>
       </div>
     </div>`;
     if(!racks.length){h+=`<div class="empty-state">No racks yet.</div>`;}
@@ -1147,7 +1151,7 @@ async function renderRack(){
   try{
     const{rack,slots}=await api('GET',`/racks/${curRack.id}/slots`);curRack=rack;
     const occupied=slots.filter(s=>s.occupied).length,p=rack.capacity?Math.round(occupied/rack.capacity*100):0;
-    let h=`<div class="section-header"><div class="section-left"><div class="section-title">${escHtml(rack.name)}</div><div class="section-sub">RACK · ${escHtml(rack.position||'—')} · ${rack.capacity} slots · ${occupied} occupied · ${p}% full</div>${rack.notes?`<div class="section-notes">${escHtml(rack.notes)}</div>`:''}</div><div class="section-right"><button class="btn btn-success" onclick="openAddBox('${rack.id}',${rack.capacity})">＋ PLACE BOX</button><button class="btn" onclick="openAutoFillRack('${rack.id}',${rack.capacity})">⊞ AUTO-FILL</button><button class="btn btn-move" onclick="openMoveRack('${rack.id}','${jsStr(rack.name)}')">↦ MOVE RACK</button><button class="btn" onclick="openEditRack('${rack.id}','${jsStr(rack.name)}','${jsStr(rack.position||'')}',${rack.capacity},'${jsStr(rack.notes||'')}')">✎ EDIT RACK</button><button class="btn btn-danger" onclick="confirmDeleteRack('${rack.id}','${jsStr(rack.name)}')">✕ DELETE RACK</button></div></div><div class="rack-legend"><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--accent2)"></div>Occupied</div><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--surface2);border:1px dashed var(--border)"></div>Empty</div><span style="margin-left:auto;color:var(--muted)">↑ slot 1 = top of rack</span></div><div class="rack-top-label">▲ TOP OF RACK</div><div class="rack-column">`;
+    let h=`<div class="section-header"><div class="section-left"><div class="section-title">${escHtml(rack.name)}</div><div class="section-sub">RACK · ${escHtml(rack.position||'—')} · ${rack.capacity} slots · ${occupied} occupied · ${p}% full</div>${rack.notes?`<div class="section-notes">${escHtml(rack.notes)}</div>`:''}</div><div class="section-right"><button class="btn btn-success" onclick="openAddBox('${rack.id}',${rack.capacity})">＋ PLACE BOX</button><button class="btn" onclick="openAutoFillRack('${rack.id}',${rack.capacity})">⊞ AUTO-FILL</button><button class="btn btn-move" onclick="openMoveRack('${rack.id}','${jsStr(rack.name)}')">↦ MOVE</button><button class="btn" onclick="openEditRack('${rack.id}','${jsStr(rack.name)}','${jsStr(rack.position||'')}',${rack.capacity},'${jsStr(rack.notes||'')}')">✎ EDIT</button><button class="btn btn-danger" onclick="confirmDeleteRack('${rack.id}','${jsStr(rack.name)}')">✕ DELETE</button><div class="hdr-sep"></div><button class="btn btn-success btn-sm" onclick="quickAddVial()" title="Add vial to a box in this rack">＋ VIAL</button><button class="btn btn-danger btn-sm" onclick="quickDeleteVial()" title="Find and delete a vial by code">✕ VIAL</button></div></div><div class="rack-legend"><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--accent2)"></div>Occupied</div><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--surface2);border:1px dashed var(--border)"></div>Empty</div><span style="margin-left:auto;color:var(--muted)">↑ slot 1 = top of rack</span></div><div class="rack-top-label">▲ TOP OF RACK</div><div class="rack-column">`;
     for(const slot of slots){
       if(slot.occupied){
         const b=slot.box,cap=b.rows*b.cols,vc=b.vial_count||0,bp=cap?Math.round(vc/cap*100):0,bcl=fillCls(bp);
@@ -1188,7 +1192,7 @@ function renderBox(){
     if(v){panelHtml=`<h3>VIAL ${pos}</h3><div class="info-field"><div class="info-label">Sample</div><div class="info-value">${escHtml(v.name)}</div></div>${v.sample_type?`<div class="info-field"><div class="info-label">Type</div><div class="info-value"><span class="tag">${escHtml(v.sample_type)}</span></div></div>`:''}<div class="info-field"><div class="info-label">Stored</div><div class="info-value">${fmtDate(v.date_stored)}</div></div>${v.volume?`<div class="info-field"><div class="info-label">Volume</div><div class="info-value">${escHtml(v.volume)}</div></div>`:''}${v.concentration?`<div class="info-field"><div class="info-label">Cell No.</div><div class="info-value">${escHtml(v.concentration)}</div></div>`:''}${v.passage?`<div class="info-field"><div class="info-label">Passage</div><div class="info-value">${escHtml(v.passage)}</div></div>`:''}${v.researcher?`<div class="info-field"><div class="info-label">Researcher</div><div class="info-value">${escHtml(v.researcher)}</div></div>`:''}${v.qr_code?`<div class="info-field"><div class="info-label">QR Code</div><div class="info-value" style="color:var(--purple);font-size:10px">${escHtml(v.qr_code)}</div></div>`:''}${v.notes?`<div class="info-field"><div class="info-label">Notes</div><div class="info-value" style="font-size:10px;color:var(--muted)">${escHtml(v.notes)}</div></div>`:''}<div class="info-actions">${v.qr_code?`<button class="btn btn-sm btn-qr" onclick="showQRModal('${jsStr(v.qr_code)}','${jsStr(pos)}')">▦ VIEW QR</button>`:''}<button class="btn btn-sm btn-success" onclick="openEditVial(${selVial.r},${selVial.c})">✎ EDIT</button><button class="btn btn-sm btn-move" onclick="openMoveVial(${selVial.r},${selVial.c})">↦ MOVE</button><button class="btn btn-sm btn-danger" onclick="confirmRemoveVial(${selVial.r},${selVial.c})">✕ REMOVE</button></div>`;}
     else{panelHtml=`<h3>EMPTY ${pos}</h3><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:14px">Position available.</div><div class="info-actions"><button class="btn btn-sm btn-success" onclick="openAddVial(${selVial.r},${selVial.c})">＋ ADD SAMPLE</button><button class="btn btn-sm" onclick="openBulkAdd()" title="Add same sample to multiple positions">＋ BULK ADD</button></div>`;}
   }else{panelHtml=`<h3>SELECT VIAL</h3><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">Click a cell to view or modify.</div>${box.notes?`<div class="info-field" style="margin-top:12px"><div class="info-label">Box Notes</div><div class="info-value" style="font-size:10px;color:var(--muted);white-space:pre-wrap">${escHtml(box.notes)}</div></div>`:''}`;}
-  el.innerHTML=`<div class="section-header"><div class="section-left"><div class="section-title">${escHtml(box.name)}</div><div class="section-sub">${box.slot_position?`Slot ${box.slot_position} · `:''}${boxSzLbl(box)} · ${used}/${cap} vials (${p}%)</div>${box.notes?`<div class="section-notes">${escHtml(box.notes)}</div>`:''}</div><div class="section-right">${box.qr_code?`<button class="btn btn-qr" onclick="showQRModal('${jsStr(box.qr_code)}','${jsStr(box.name)}')">▦ BOX QR</button>`:''}<button class="btn" onclick="openEditBox('${curRack.id}','${box.id}','${jsStr(box.name)}',${box.slot_position},${box.rows},${box.cols},'${jsStr(box.qr_code||'')}','${jsStr(box.notes||'')}',${curRack.capacity})">✎ EDIT BOX</button><button class="btn btn-move" onclick="openMoveBox('${box.id}','${jsStr(box.name)}',${box.slot_position})">↦ MOVE BOX</button><button class="btn btn-success" onclick="openBulkAdd()">＋ BULK ADD</button><button class="btn btn-danger" onclick="confirmDeleteBox('${box.id}','${jsStr(box.name)}',${box.slot_position})">✕ DELETE BOX</button></div></div><div class="legend"><div class="legend-item"><div class="legend-box" style="background:rgba(0,120,180,.25);border-color:var(--accent2)"></div>Occupied</div><div class="legend-item"><div class="legend-box" style="background:var(--surface);border-color:var(--border)"></div>Empty</div><div class="legend-item"><div class="legend-box" style="background:rgba(0,200,255,.2);border-color:var(--accent)"></div>Selected</div><div class="legend-item"><div class="legend-box" style="background:rgba(255,149,0,.2);border-color:var(--warn)"></div>Search match</div><div class="legend-item" style="color:var(--purple)">▦ = QR linked</div></div><div class="box-view"><div class="vial-grid-wrap">${colHtml}${rowsHtml}</div><div class="info-panel">${panelHtml}</div></div>`;
+  el.innerHTML=`<div class="section-header"><div class="section-left"><div class="section-title">${escHtml(box.name)}</div><div class="section-sub">${box.slot_position?`Slot ${box.slot_position} · `:''}${boxSzLbl(box)} · ${used}/${cap} vials (${p}%)</div>${box.notes?`<div class="section-notes">${escHtml(box.notes)}</div>`:''}</div><div class="section-right">${box.qr_code?`<button class="btn btn-qr" onclick="showQRModal('${jsStr(box.qr_code)}','${jsStr(box.name)}')">▦ CODE</button>`:''}<button class="btn btn-success" onclick="openBulkAdd()">＋ BULK ADD</button><button class="btn btn-move" onclick="openMoveBox('${box.id}','${jsStr(box.name)}',${box.slot_position})">↦ MOVE</button><button class="btn" onclick="openEditBox('${curRack.id}','${box.id}','${jsStr(box.name)}',${box.slot_position},${box.rows},${box.cols},'${jsStr(box.qr_code||'')}','${jsStr(box.notes||'')}',${curRack.capacity})">✎ EDIT</button><button class="btn btn-danger" onclick="confirmDeleteBox('${box.id}','${jsStr(box.name)}',${box.slot_position})">✕ DELETE</button><div class="hdr-sep"></div><button class="btn btn-success btn-sm" onclick="quickAddVialBox()" title="Add vial to first empty cell">＋ VIAL</button><button class="btn btn-danger btn-sm" onclick="quickDeleteVial()" title="Find and delete a vial by code">✕ VIAL</button></div></div><div class="legend"><div class="legend-item"><div class="legend-box" style="background:rgba(0,120,180,.25);border-color:var(--accent2)"></div>Occupied</div><div class="legend-item"><div class="legend-box" style="background:var(--surface);border-color:var(--border)"></div>Empty</div><div class="legend-item"><div class="legend-box" style="background:rgba(0,200,255,.2);border-color:var(--accent)"></div>Selected</div><div class="legend-item"><div class="legend-box" style="background:rgba(255,149,0,.2);border-color:var(--warn)"></div>Search match</div><div class="legend-item" style="color:var(--purple)">▦ = QR linked</div></div><div class="box-view"><div class="vial-grid-wrap">${colHtml}${rowsHtml}</div><div class="info-panel">${panelHtml}</div></div>`;
   if(hl) requestAnimationFrame(()=>{ const e=document.getElementById(`vial-${hl.r}-${hl.c}`); if(e) e.scrollIntoView({behavior:'smooth',block:'center'}); });
 }
 function selectVial(r,c){selVial={r,c};renderBox();}
@@ -2999,6 +3003,118 @@ async function doAutoFill(rackId){
   hideLoading();
   toast(`Auto-fill complete: ${created} box${created!==1?'es':''} created${failed?`, ${failed} failed`:''}`);
   await renderRack();
+}
+
+// ============================================================================
+// QUICK VIAL ACTIONS — available at rack and box level
+// ============================================================================
+
+// ＋ VIAL at rack level: pick a box, then add to the first empty cell
+async function quickAddVial(){
+  if(!curRack){ toast('No rack selected', 'err'); return; }
+  const boxes = await api('GET', `/racks/${curRack.id}/boxes`).catch(()=>[]);
+  if(!boxes.length){ toast('No boxes in this rack — place a box first', 'err'); return; }
+
+  // Find boxes that have at least one empty cell
+  const available = [];
+  for(const b of boxes){
+    const {vials} = await api('GET', `/boxes/${b.id}/vials`).catch(()=>({vials:[]}));
+    const used = vials.filter(v=>!v.archived_at).length;
+    const cap  = b.rows * b.cols;
+    if(used < cap) available.push({ ...b, used, cap });
+  }
+  if(!available.length){ toast('All boxes in this rack are full', 'err'); return; }
+
+  const opts = available.map(b =>
+    `<option value="${b.id}">${escHtml(b.name)} (${b.used}/${b.cap} used)</option>`
+  ).join('');
+
+  openModal(`
+    <h2>＋ VIAL — Quick Add</h2>
+    <div class="form-group">
+      <label class="form-label">Select Box</label>
+      <select class="form-select" id="qa-box-sel">${opts}</select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">CANCEL</button>
+      <button class="btn btn-success" onclick="quickAddVialToBox()">NEXT →</button>
+    </div>`);
+}
+
+async function quickAddVialToBox(){
+  const sel = document.getElementById('qa-box-sel');
+  if(!sel) return;
+  const boxId = sel.value;
+  const {box, vials} = await api('GET', `/boxes/${boxId}/vials`).catch(()=>({box:null,vials:[]}));
+  if(!box){ toast('Box not found', 'err'); return; }
+
+  // Find first empty cell (row-major order)
+  const occupied = new Set(vials.filter(v=>!v.archived_at).map(v=>`${v.row_index},${v.col_index}`));
+  let firstR = null, firstC = null;
+  outer: for(let r=0; r<box.rows; r++){
+    for(let c=0; c<box.cols; c++){
+      if(!occupied.has(`${r},${c}`)){ firstR=r; firstC=c; break outer; }
+    }
+  }
+  if(firstR === null){ toast('Box is full', 'err'); return; }
+
+  curBox = box; curBox._vials = vials;
+  closeModal();
+  openAddVial(firstR, firstC);
+}
+
+// ＋ VIAL at box level: add to first empty cell
+function quickAddVialBox(){
+  if(!curBox){ toast('No box open', 'err'); return; }
+  const occupied = new Set((curBox._vials||[]).filter(v=>!v.archived_at).map(v=>`${v.row_index},${v.col_index}`));
+  for(let r=0; r<curBox.rows; r++){
+    for(let c=0; c<curBox.cols; c++){
+      if(!occupied.has(`${r},${c}`)){ openAddVial(r,c); return; }
+    }
+  }
+  toast('Box is full — no empty positions', 'err');
+}
+
+// ✕ VIAL at rack or box level: find by code then confirm delete
+function quickDeleteVial(){
+  openModal(`
+    <h2>✕ VIAL — Quick Delete</h2>
+    <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:14px">
+      Enter the vial's QR/barcode value to look it up and delete it.
+    </div>
+    <div class="form-group">
+      <label class="form-label">Code Value</label>
+      <div class="scan-row">
+        <input class="form-input" id="qd-code" placeholder="Scan or type code…" autofocus/>
+        <button class="btn btn-qr" onclick="openQRScanner('qd-code')">▦ SCAN</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">CANCEL</button>
+      <button class="btn btn-danger" onclick="quickDeleteVialLookup()">FIND & DELETE</button>
+    </div>`);
+}
+
+async function quickDeleteVialLookup(){
+  const code = (document.getElementById('qd-code')?.value||'').trim();
+  if(!code){ toast('Enter a code value', 'err'); return; }
+  try{
+    const vial = await api('GET', `/vials/by-qr?code=${encodeURIComponent(code)}`);
+    if(!vial || !vial.id){ toast('Vial not found', 'err'); return; }
+    closeModal();
+    // Re-use the existing confirmRemoveVial flow by navigating to the vial's box
+    const {box, vials} = await api('GET', `/boxes/${vial.box_id}/vials`);
+    curBox = box; curBox._vials = vials;
+    if(!curRack || curRack.id !== box.rack_id) curRack = await api('GET', `/racks/${box.rack_id}`);
+    view = 'box';
+    updateBreadcrumb();
+    renderBox();
+    // Trigger delete confirmation
+    selVial = { r: vial.row_index, c: vial.col_index };
+    confirmRemoveVial(vial.row_index, vial.col_index);
+  }catch(e){
+    toast('Not found: ' + e.message, 'err');
+  }
 }
 
 // ── BOOT ──────────────────────────────────────────────────────────────────────
