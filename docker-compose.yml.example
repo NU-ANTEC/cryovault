@@ -33,7 +33,7 @@
 # =============================================================================
 
 # Compose file format version. "3.8" is stable and supports all features used here.
-version: "3.8"
+# version: "3.8"
 
 services:
 
@@ -132,6 +132,7 @@ services:
     # Change the left number to use a different host port, e.g. "8080:80"
     ports:
       - "80:80"
+      - "443:443"
 
     volumes:
       - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
