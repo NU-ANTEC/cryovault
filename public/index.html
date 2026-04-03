@@ -688,6 +688,8 @@ header{
   cursor:pointer;transition:all .12s;border-radius:var(--radius);
 }
 .wf-select-item:hover{border-color:var(--accent);background:var(--surface)}
+.wf-select-item-disabled{cursor:default;opacity:0.45}
+.wf-select-item-disabled:hover{border-color:var(--border);background:var(--surface2)}
 .wf-select-item-left{flex:1}
 .wf-select-item-name{
   font-family:var(--font-sans);font-size:15px;font-weight:600;color:var(--text);
@@ -1145,7 +1147,7 @@ async function renderRack(){
   try{
     const{rack,slots}=await api('GET',`/racks/${curRack.id}/slots`);curRack=rack;
     const occupied=slots.filter(s=>s.occupied).length,p=rack.capacity?Math.round(occupied/rack.capacity*100):0;
-    let h=`<div class="section-header"><div class="section-left"><div class="section-title">${escHtml(rack.name)}</div><div class="section-sub">RACK · ${escHtml(rack.position||'—')} · ${rack.capacity} slots · ${occupied} occupied · ${p}% full</div>${rack.notes?`<div class="section-notes">${escHtml(rack.notes)}</div>`:''}</div><div class="section-right"><button class="btn btn-success" onclick="openAddBox('${rack.id}',${rack.capacity})">＋ PLACE BOX</button><button class="btn" onclick="openAutoFillRack('${rack.id}',${rack.capacity})">⊞ AUTO-FILL</button><button class="btn" onclick="openEditRack('${rack.id}','${jsStr(rack.name)}','${jsStr(rack.position||'')}',${rack.capacity},'${jsStr(rack.notes||'')}')">✎ EDIT RACK</button><button class="btn btn-danger" onclick="confirmDeleteRack('${rack.id}','${jsStr(rack.name)}')">✕ DELETE RACK</button></div></div><div class="rack-legend"><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--accent2)"></div>Occupied</div><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--surface2);border:1px dashed var(--border)"></div>Empty</div><span style="margin-left:auto;color:var(--muted)">↑ slot 1 = top of rack</span></div><div class="rack-top-label">▲ TOP OF RACK</div><div class="rack-column">`;
+    let h=`<div class="section-header"><div class="section-left"><div class="section-title">${escHtml(rack.name)}</div><div class="section-sub">RACK · ${escHtml(rack.position||'—')} · ${rack.capacity} slots · ${occupied} occupied · ${p}% full</div>${rack.notes?`<div class="section-notes">${escHtml(rack.notes)}</div>`:''}</div><div class="section-right"><button class="btn btn-success" onclick="openAddBox('${rack.id}',${rack.capacity})">＋ PLACE BOX</button><button class="btn" onclick="openAutoFillRack('${rack.id}',${rack.capacity})">⊞ AUTO-FILL</button><button class="btn btn-move" onclick="openMoveRack('${rack.id}','${jsStr(rack.name)}')">↦ MOVE RACK</button><button class="btn" onclick="openEditRack('${rack.id}','${jsStr(rack.name)}','${jsStr(rack.position||'')}',${rack.capacity},'${jsStr(rack.notes||'')}')">✎ EDIT RACK</button><button class="btn btn-danger" onclick="confirmDeleteRack('${rack.id}','${jsStr(rack.name)}')">✕ DELETE RACK</button></div></div><div class="rack-legend"><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--accent2)"></div>Occupied</div><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--surface2);border:1px dashed var(--border)"></div>Empty</div><span style="margin-left:auto;color:var(--muted)">↑ slot 1 = top of rack</span></div><div class="rack-top-label">▲ TOP OF RACK</div><div class="rack-column">`;
     for(const slot of slots){
       if(slot.occupied){
         const b=slot.box,cap=b.rows*b.cols,vc=b.vial_count||0,bp=cap?Math.round(vc/cap*100):0,bcl=fillCls(bp);
@@ -2370,6 +2372,65 @@ function openMoveBox(boxId, boxName, slotPos){
     tank: null, rack: null, targetSlot: null,
   };
   mvPickTank();
+}
+
+async function openMoveRack(rackId, rackName){
+  // Simple modal: just pick the target tank from a list
+  showLoading();
+  try{
+    const tanks   = await api('GET', '/tanks');
+    const current = curTank?.id;
+    hideLoading();
+
+    const items = tanks.map(t => {
+      const isCurrent = t.id === current;
+      return `<div class="wf-select-item${isCurrent?' wf-select-item-disabled':''}"
+        ${!isCurrent ? `onclick="doMoveRack('${rackId}','${jsStr(rackName)}','${t.id}','${jsStr(t.name)}')"` : ''}>
+        <div class="wf-select-item-left">
+          <div class="wf-select-item-name">${escHtml(t.name)}</div>
+          ${isCurrent ? '<div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">Current tank</div>' : ''}
+        </div>
+        ${!isCurrent ? '<div class="wf-select-item-arrow">›</div>' : ''}
+      </div>`;
+    }).join('');
+
+    openModal(`
+      <h2>↦ MOVE RACK</h2>
+      <div class="move-from">
+        <div class="move-from-label">Moving rack</div>
+        <div class="move-from-value">${escHtml(rackName)}</div>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:3px">
+          from tank: ${escHtml(curTank?.name || '—')}
+        </div>
+      </div>
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:10px">
+        Select destination tank:
+      </div>
+      <div class="wf-select-list">${items}</div>
+      <div class="modal-actions"><button class="btn" onclick="closeModal()">CANCEL</button></div>`);
+  }catch(e){
+    hideLoading();
+    toast('Failed to load tanks: ' + e.message, 'err');
+  }
+}
+
+async function doMoveRack(rackId, rackName, targetTankId, targetTankName){
+  closeModal();
+  showLoading();
+  try{
+    await api('POST', `/racks/${rackId}/move`, {
+      target_tank_id: targetTankId,
+      changedBy: getRes()
+    });
+    toast(`Rack "${rackName}" moved to ${targetTankName}`);
+    // Navigate back to the home view of the current tank
+    // The rack is now in a different tank so go to tank list
+    await goTankList();
+  }catch(e){
+    toast('Move failed: ' + e.message, 'err');
+  }finally{
+    hideLoading();
+  }
 }
 
 // =============================================================================

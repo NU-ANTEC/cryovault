@@ -184,3 +184,51 @@ router.post('/boxes/:id/move', (req, res) => {
 
 
 module.exports = router;
+
+
+// =============================================================================
+// POST /api/racks/:id/move
+// =============================================================================
+// Move a rack to a different tank.
+// Body: { target_tank_id, changedBy? }
+// The rack keeps all its boxes, slots, and vials — only tank_id changes.
+// =============================================================================
+router.post('/racks/:id/move', (req, res) => {
+  const { target_tank_id, changedBy = 'anonymous' } = req.body;
+
+  if (!target_tank_id) {
+    return res.status(400).json({ error: 'target_tank_id is required' });
+  }
+
+  const rack = db.prepare(`SELECT * FROM racks WHERE id = ? AND archived_at IS NULL`).get(req.params.id);
+  if (!rack) return res.status(404).json({ error: 'Rack not found' });
+
+  if (rack.tank_id === target_tank_id) {
+    return res.status(400).json({ error: 'Rack is already in that tank' });
+  }
+
+  const targetTank = db.prepare(`SELECT * FROM tanks WHERE id = ?`).get(target_tank_id);
+  if (!targetTank) return res.status(404).json({ error: 'Target tank not found' });
+
+  const sourceTank = db.prepare(`SELECT * FROM tanks WHERE id = ?`).get(rack.tank_id);
+
+  const now = new Date().toISOString();
+
+  db.prepare(`UPDATE racks SET tank_id = ?, updated_at = ? WHERE id = ?`)
+    .run(target_tank_id, now, rack.id);
+
+  const moved = db.prepare(`SELECT * FROM racks WHERE id = ?`).get(rack.id);
+
+  logAudit({
+    entityType: 'rack', entityId: rack.id, entityName: rack.name,
+    action: 'move', changedBy,
+    oldData: { ...rack, tank_name: sourceTank?.name },
+    newData: { ...moved, tank_name: targetTank.name },
+    context: {
+      from: { tank_id: rack.tank_id, tank_name: sourceTank?.name },
+      to:   { tank_id: target_tank_id, tank_name: targetTank.name }
+    }
+  });
+
+  res.json({ moved: true, rack: moved, from: sourceTank?.name, to: targetTank.name });
+});
