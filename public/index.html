@@ -1153,8 +1153,8 @@ async function renderRack(){
   showLoading();const el=document.getElementById('main-content');
   try{
     const{rack,slots}=await api('GET',`/racks/${curRack.id}/slots`);curRack=rack;
-    const occupied=slots.filter(s=>s.occupied).length,p=rack.capacity?Math.round(occupied/rack.capacity*100):0;
-    let h=`<div class="section-header"><div class="section-left"><div class="section-title">${escHtml(rack.name)}</div><div class="section-sub">RACK · ${escHtml(rack.position||'—')} · ${rack.capacity} slots · ${occupied} occupied · ${p}% full</div>${rack.notes?`<div class="section-notes">${escHtml(rack.notes)}</div>`:''}</div><div class="section-right"><button class="btn btn-success" onclick="openAddBox('${rack.id}',${rack.capacity})">＋ PLACE BOX</button><button class="btn" onclick="openAutoFillRack('${rack.id}',${rack.capacity})">⊞ AUTO-FILL</button><button class="btn btn-move" onclick="openMoveRack('${rack.id}','${jsStr(rack.name)}')">↦ MOVE</button><button class="btn" onclick="openEditRack('${rack.id}','${jsStr(rack.name)}','${jsStr(rack.position||'')}',${rack.capacity},'${jsStr(rack.notes||'')}')">✎ EDIT</button><button class="btn btn-danger" onclick="confirmDeleteRack('${rack.id}','${jsStr(rack.name)}')">✕ DELETE</button><div class="hdr-sep"></div><button class="btn btn-success btn-sm" onclick="quickAddVial()" title="Add vial to a box in this rack">＋ VIAL</button><button class="btn btn-danger btn-sm" onclick="quickDeleteVial()" title="Find and delete a vial by code">✕ VIAL</button></div></div><div class="rack-legend"><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--accent2)"></div>Occupied</div><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--surface2);border:1px dashed var(--border)"></div>Empty</div><span style="margin-left:auto;color:var(--muted)">↑ slot 1 = top of rack</span></div><div class="rack-top-label">▲ TOP OF RACK</div><div class="rack-column">`;
+    const occupied=slots.filter(s=>s.occupied).length;const totalVialCap=slots.filter(s=>s.box).reduce((a,s)=>a+(s.box.rows*s.box.cols),0);const totalVials=slots.filter(s=>s.box).reduce((a,s)=>a+(s.box.vial_count||0),0);const p=totalVialCap?Math.round(totalVials/totalVialCap*100):0;
+    let h=`<div class="section-header"><div class="section-left"><div class="section-title">${escHtml(rack.name)}</div><div class="section-sub">RACK · ${escHtml(rack.position||'—')} · ${rack.capacity} slots · ${occupied}/${rack.capacity} boxes · ${totalVials}/${totalVialCap} vials (${p}%)</div>${rack.notes?`<div class="section-notes">${escHtml(rack.notes)}</div>`:''}</div><div class="section-right"><button class="btn btn-success" onclick="openAddBox('${rack.id}',${rack.capacity})">＋ PLACE BOX</button><button class="btn" onclick="openAutoFillRack('${rack.id}',${rack.capacity})">⊞ AUTO-FILL</button><button class="btn btn-move" onclick="openMoveRack('${rack.id}','${jsStr(rack.name)}')">↦ MOVE</button><button class="btn" onclick="openEditRack('${rack.id}','${jsStr(rack.name)}','${jsStr(rack.position||'')}',${rack.capacity},'${jsStr(rack.notes||'')}')">✎ EDIT</button><button class="btn btn-danger" onclick="confirmDeleteRack('${rack.id}','${jsStr(rack.name)}')">✕ DELETE</button><div class="hdr-sep"></div><button class="btn btn-success btn-sm" onclick="quickAddVial()" title="Add vial to a box in this rack">＋ VIAL</button><button class="btn btn-danger btn-sm" onclick="quickDeleteVial()" title="Find and delete a vial by code">✕ VIAL</button></div></div><div class="rack-legend"><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--accent2)"></div>Occupied</div><div style="display:flex;align-items:center;gap:6px"><div class="leg-dot" style="background:var(--surface2);border:1px dashed var(--border)"></div>Empty</div><span style="margin-left:auto;color:var(--muted)">↑ slot 1 = top of rack</span></div><div class="rack-top-label">▲ TOP OF RACK</div><div class="rack-column">`;
     for(const slot of slots){
       if(slot.occupied){
         const b=slot.box,cap=b.rows*b.cols,vc=b.vial_count||0,bp=cap?Math.round(vc/cap*100):0,bcl=fillCls(bp);
@@ -1419,7 +1419,6 @@ function applyHistoryFilter(){historyFilter.entity_type=document.getElementById(
 // ── MODALS ────────────────────────────────────────────────────────────────────
 function openModal(html){document.getElementById('modal-body').innerHTML=html;document.getElementById('modal').style.display='flex';}
 function closeModal(){document.getElementById('modal').style.display='none';}
-document.getElementById('modal').addEventListener('click',e=>{if(e.target===document.getElementById('modal')) closeModal();});
 function confirmDialog(title,msg,cb){openModal(`<div class="confirm-box"><h2>⚠ ${title}</h2><p>${msg}</p><div class="modal-actions"><button class="btn" onclick="closeModal()">CANCEL</button><button class="btn btn-danger" id="confirm-ok">CONFIRM</button></div></div>`);document.getElementById('confirm-ok').onclick=()=>{closeModal();cb();};}
 
 // ── QR ────────────────────────────────────────────────────────────────────────
@@ -1792,12 +1791,6 @@ function wfCancel(){
 }
 
 // Close-modal click should also stop the camera
-document.getElementById('modal').addEventListener('click', e => {
-  if(e.target === document.getElementById('modal')){
-    wfStopCamera();
-    wfState = null;
-  }
-});
 
 // ── STEP 2: Look up QR code and branch ────────────────────────────────────────
 async function wfHandleQR(code){
