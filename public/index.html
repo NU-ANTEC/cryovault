@@ -1139,8 +1139,16 @@ async function renderHome(){
     else{h+=`<div class="card-grid">`;
       for(const rack of racks){
         const boxes=await api('GET',`/racks/${rack.id}/boxes`).catch(()=>[]);
-        const occupied=boxes.length,p=rack.capacity?Math.round(occupied/rack.capacity*100):0,cl=fillCls(p);
-        h+=`<div class="card"><div class="card-accent"></div><div class="card-body" onclick="goRack('${rack.id}')"><div class="card-label"><span>RACK · ${rack.id.slice(0,8)}</span></div><div class="card-title">${escHtml(rack.name)}</div><div class="card-meta">Capacity: <span class="val">${rack.capacity} slots</span><br>Boxes: <span class="val">${occupied}/${rack.capacity}</span> ${badgeHtml(p)}<br>Position: <span class="val">${escHtml(rack.position||'—')}</span>${rack.notes?`<br><span style="color:var(--muted);font-size:10px">${escHtml(rack.notes.slice(0,60))}${rack.notes.length>60?'…':''}</span>`:''}</div><div class="fill-bar"><div class="fill-bar-inner ${cl}" style="width:${p}%"></div></div></div><div class="card-actions"><button class="ca" onclick="event.stopPropagation();openAddBox('${rack.id}',${rack.capacity})">＋ BOX</button><button class="ca" onclick="event.stopPropagation();openEditRack('${rack.id}','${jsStr(rack.name)}','${jsStr(rack.position||'')}',${rack.capacity},'${jsStr(rack.notes||'')}')">✎ EDIT</button><button class="ca del" onclick="event.stopPropagation();confirmDeleteRack('${rack.id}','${jsStr(rack.name)}')">✕ DEL</button></div></div>`;
+        // Vial stats: sum all vial slots across every box in the rack
+        let vialCount=0, vialCap=0;
+        for(const b of boxes){
+          vialCap += b.rows * b.cols;
+          const {vials=[]} = await api('GET',`/boxes/${b.id}/vials`).catch(()=>({vials:[]}));
+          vialCount += vials.filter(v=>!v.archived_at).length;
+        }
+        const boxOccupied=boxes.length;
+        const vp=vialCap?Math.round(vialCount/vialCap*100):0,cl=fillCls(vp);
+        h+=`<div class="card"><div class="card-accent"></div><div class="card-body" onclick="goRack('${rack.id}')"><div class="card-label"><span>RACK · ${rack.id.slice(0,8)}</span></div><div class="card-title">${escHtml(rack.name)}</div><div class="card-meta">Boxes: <span class="val">${boxOccupied}/${rack.capacity} slots</span><br>Vials: <span class="val">${vialCount}/${vialCap}</span> ${badgeHtml(vp)}<br>Position: <span class="val">${escHtml(rack.position||'—')}</span>${rack.notes?`<br><span style="color:var(--muted);font-size:10px">${escHtml(rack.notes.slice(0,60))}${rack.notes.length>60?'…':''}</span>`:''}</div><div class="fill-bar"><div class="fill-bar-inner ${cl}" style="width:${vp}%"></div></div></div><div class="card-actions"><button class="ca" onclick="event.stopPropagation();openAddBox('${rack.id}',${rack.capacity})">＋ BOX</button><button class="ca" onclick="event.stopPropagation();openEditRack('${rack.id}','${jsStr(rack.name)}','${jsStr(rack.position||'')}',${rack.capacity},'${jsStr(rack.notes||'')}')">✎ EDIT</button><button class="ca del" onclick="event.stopPropagation();confirmDeleteRack('${rack.id}','${jsStr(rack.name)}')">✕ DEL</button></div></div>`;
       }
       h+=`</div>`;}
     el.innerHTML=h;refreshStats();
