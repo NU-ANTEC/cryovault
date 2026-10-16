@@ -118,12 +118,18 @@ router.put('/boxes/:boxId/vials/:row/:col', (req, res) => {
       `).get(req.params.boxId, row, col);
 
       if (existing) {
-        // UPDATE — vial already occupies this position
+        // UPDATE — vial already occupies this position (may be archived).
+        // Always clear archived_at so that placing a vial at a previously
+        // archived position makes it live again. Without this, a soft-deleted
+        // vial would silently block the slot: the GET filters by
+        // "archived_at IS NULL" so the frontend sees the cell as empty, but
+        // the UNIQUE constraint (box_id, row_index, col_index) means no fresh
+        // INSERT can succeed — the archived row is still there.
         db.prepare(`
           UPDATE vials
           SET name = ?, sample_type = ?, date_stored = ?, volume = ?,
               concentration = ?, researcher = ?, qr_code = ?, passage = ?, notes = ?,
-              updated_at = ?
+              updated_at = ?, archived_at = NULL
           WHERE box_id = ? AND row_index = ? AND col_index = ?
         `).run(
           name.trim(), sample_type, date_stored, volume,
