@@ -39,11 +39,27 @@ const MAX_CAPACITY = 100;
 // Each rack object includes: id, tank_id, name, position, capacity, notes,
 // created_at, updated_at.
 // =============================================================================
+//
+// Each rack also carries the numbers its card shows, computed here in one
+// query (active boxes and vials only):
+//   box_count      boxes in the rack
+//   vial_count     vials in those boxes
+//   vial_capacity  total cells (rows × cols) of those boxes
+// Before, the page fetched every vial of every box to count them itself,
+// which took hundreds of requests on a full tank.
 router.get('/tanks/:tankId/racks', (req, res) => {
   const racks = db.prepare(`
-    SELECT * FROM racks
-    WHERE  tank_id = ? AND archived_at IS NULL
-    ORDER  BY name
+    SELECT r.*,
+           (SELECT COUNT(*) FROM boxes b
+             WHERE b.rack_id = r.id AND b.archived_at IS NULL)                  AS box_count,
+           (SELECT COALESCE(SUM(b.rows * b.cols), 0) FROM boxes b
+             WHERE b.rack_id = r.id AND b.archived_at IS NULL)                  AS vial_capacity,
+           (SELECT COUNT(*) FROM vials v JOIN boxes b ON b.id = v.box_id
+             WHERE b.rack_id = r.id AND b.archived_at IS NULL
+               AND v.archived_at IS NULL)                                      AS vial_count
+    FROM   racks r
+    WHERE  r.tank_id = ? AND r.archived_at IS NULL
+    ORDER  BY r.name
   `).all(req.params.tankId);
   res.json(racks);
 });

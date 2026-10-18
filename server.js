@@ -168,8 +168,28 @@ if (process.env.NODE_ENV !== 'test') {
 // =============================================================================
 
 // GET /api/tanks — list all tanks ordered by name
+// Each tank also carries the numbers its card and the header show, computed
+// in this one query (active racks, boxes and vials only): rack_count,
+// box_count, vial_count, and vial_capacity (total cells of its boxes).
 app.get('/api/tanks', (_req, res) => {
-  const tanks = db.prepare('SELECT * FROM tanks ORDER BY name').all();
+  const tanks = db.prepare(`
+    SELECT t.*,
+           (SELECT COUNT(*) FROM racks r
+             WHERE r.tank_id = t.id AND r.archived_at IS NULL)                  AS rack_count,
+           (SELECT COUNT(*) FROM boxes b JOIN racks r ON r.id = b.rack_id
+             WHERE r.tank_id = t.id AND r.archived_at IS NULL
+               AND b.archived_at IS NULL)                                      AS box_count,
+           (SELECT COALESCE(SUM(b.rows * b.cols), 0)
+              FROM boxes b JOIN racks r ON r.id = b.rack_id
+             WHERE r.tank_id = t.id AND r.archived_at IS NULL
+               AND b.archived_at IS NULL)                                      AS vial_capacity,
+           (SELECT COUNT(*)
+              FROM vials v JOIN boxes b ON b.id = v.box_id JOIN racks r ON r.id = b.rack_id
+             WHERE r.tank_id = t.id AND r.archived_at IS NULL
+               AND b.archived_at IS NULL AND v.archived_at IS NULL)            AS vial_count
+    FROM   tanks t
+    ORDER  BY t.name
+  `).all();
   res.json(tanks);
 });
 

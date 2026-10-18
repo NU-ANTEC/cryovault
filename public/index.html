@@ -925,13 +925,18 @@ async function api(method,path,body=null){
 }
 
 // ── HEADER STATS ──────────────────────────────────────────────────────────────
-async function refreshStats(){
-  if(!curTank) return;
-  const h=await api('GET','/health').catch(()=>null);
-  if(h){document.getElementById('hdr-racks').textContent=h.racks;document.getElementById('hdr-boxes').textContent=h.boxes;document.getElementById('hdr-vials').textContent=h.vials;}
-  const racks=await api('GET',`/tanks/${curTank.id}/racks`).catch(()=>[]);
-  let cap=0; for(const r of racks){const boxes=await api('GET',`/racks/${r.id}/boxes`).catch(()=>[]);for(const b of boxes) cap+=b.rows*b.cols;}
-  document.getElementById('hdr-cap').textContent=cap;
+// Header figures: active racks / boxes / vials and total cells — for the
+// selected tank, or summed over all tanks on the tank list. All from the
+// tank list, which carries these counts (one request).
+async function refreshStats(tanks){
+  tanks = tanks || await api('GET','/tanks').catch(()=>null);
+  if(!tanks) return;
+  const shown = curTank && view!=='tanks' ? tanks.filter(t=>t.id===curTank.id) : tanks;
+  const sum = k => shown.reduce((a,t)=>a+(t[k]||0),0).toLocaleString();
+  document.getElementById('hdr-racks').textContent=sum('rack_count');
+  document.getElementById('hdr-boxes').textContent=sum('box_count');
+  document.getElementById('hdr-vials').textContent=sum('vial_count');
+  document.getElementById('hdr-cap').textContent=sum('vial_capacity');
 }
 
 // ── BREADCRUMB ────────────────────────────────────────────────────────────────
@@ -984,13 +989,8 @@ async function renderTankList(){
     window._tankCache = {};
     for (const t of tanks) window._tankCache[t.id] = t;
 
-    // Header stats from /api/health (global, not per-tank)
-    const health=await api('GET','/health').catch(()=>null);
-    if(health){
-      document.getElementById('hdr-racks').textContent=health.racks;
-      document.getElementById('hdr-boxes').textContent=health.boxes;
-      document.getElementById('hdr-vials').textContent=health.vials;
-    }
+    // Header stats: totals over all tanks (same counts as the cards)
+    refreshStats(tanks);
     document.getElementById('hdr-tank').textContent=`${tanks.length} tank${tanks.length!==1?'s':''}`;
 
     let h=`<div class="section-header">
@@ -1010,16 +1010,8 @@ async function renderTankList(){
     } else {
       h+=`<div class="card-grid">`;
       for(const tank of tanks){
-        const racks=await api('GET',`/tanks/${tank.id}/racks`).catch(()=>[]);
-        let vialCount=0,capCount=0;
-        for(const r of racks){
-          const boxes=await api('GET',`/racks/${r.id}/boxes`).catch(()=>[]);
-          for(const b of boxes){
-            capCount+=b.rows*b.cols;
-            const res=await api('GET',`/boxes/${b.id}/vials`).catch(()=>({vials:[]}));
-            vialCount+=(res.vials||[]).length;
-          }
-        }
+        // Counts come with the tank list (computed by the server in one query).
+        const rackCount=tank.rack_count||0, vialCount=tank.vial_count||0, capCount=tank.vial_capacity||0;
         const p  = capCount ? Math.round(vialCount/capCount*100) : 0;
         const cl = fillCls(p);
         // Use a data attribute instead of inline onclick — avoids all
@@ -1030,7 +1022,7 @@ async function renderTankList(){
             <div class="card-label"><span>TANK · ${tank.id.slice(0,8)}</span></div>
             <div class="card-title">${escHtml(tank.name)}</div>
             <div class="card-meta">
-              Racks: <span class="val">${racks.length}</span><br>
+              Racks: <span class="val">${rackCount}</span><br>
               Vials: <span class="val">${vialCount}/${capCount}</span> ${badgeHtml(p)}<br>
               Temp: <span class="val">${escHtml(tank.temperature||'—')}</span>
             </div>
@@ -1138,15 +1130,9 @@ async function renderHome(){
     if(!racks.length){h+=`<div class="empty-state">No racks yet.</div>`;}
     else{h+=`<div class="card-grid">`;
       for(const rack of racks){
-        const boxes=await api('GET',`/racks/${rack.id}/boxes`).catch(()=>[]);
-        // Vial stats: sum all vial slots across every box in the rack
-        let vialCount=0, vialCap=0;
-        for(const b of boxes){
-          vialCap += b.rows * b.cols;
-          const {vials=[]} = await api('GET',`/boxes/${b.id}/vials`).catch(()=>({vials:[]}));
-          vialCount += vials.filter(v=>!v.archived_at).length;
-        }
-        const boxOccupied=boxes.length;
+        // Counts come with the rack list (computed by the server in one query).
+        const vialCount=rack.vial_count||0, vialCap=rack.vial_capacity||0;
+        const boxOccupied=rack.box_count||0;
         const vp=vialCap?Math.round(vialCount/vialCap*100):0,cl=fillCls(vp);
         h+=`<div class="card"><div class="card-accent"></div><div class="card-body" onclick="goRack('${rack.id}')"><div class="card-label"><span>RACK · ${rack.id.slice(0,8)}</span></div><div class="card-title">${escHtml(rack.name)}</div><div class="card-meta">Boxes: <span class="val">${boxOccupied}/${rack.capacity} slots</span><br>Vials: <span class="val">${vialCount}/${vialCap}</span> ${badgeHtml(vp)}<br>Position: <span class="val">${escHtml(rack.position||'—')}</span>${rack.notes?`<br><span style="color:var(--muted);font-size:10px">${escHtml(rack.notes.slice(0,60))}${rack.notes.length>60?'…':''}</span>`:''}</div><div class="fill-bar"><div class="fill-bar-inner ${cl}" style="width:${vp}%"></div></div></div><div class="card-actions"><button class="ca" onclick="event.stopPropagation();openAddBox('${rack.id}',${rack.capacity})">＋ BOX</button><button class="ca" onclick="event.stopPropagation();openEditRack('${rack.id}','${jsStr(rack.name)}','${jsStr(rack.position||'')}',${rack.capacity},'${jsStr(rack.notes||'')}')">✎ EDIT</button><button class="ca del" onclick="event.stopPropagation();confirmDeleteRack('${rack.id}','${jsStr(rack.name)}')">✕ DEL</button></div></div>`;
       }
@@ -2154,6 +2140,8 @@ async function wfSaveVial(){
 // results, so the search box keeps its focus and text. The filter and search
 // live at module level, so they survive a restore (which re-renders the view).
 let archiveFilter='all', archiveSearch='', archiveSearchTimer=null, archiveRequest=0;
+// At most this many items per type are drawn; searching narrows the rest.
+const ARCHIVE_SHOW=200;
 
 async function renderArchive(){
   showLoading();
@@ -2198,23 +2186,29 @@ async function fetchArchive(){
     const params=new URLSearchParams();
     if(archiveFilter!=='all') params.set('type',archiveFilter);
     if(archiveSearch) params.set('q',archiveSearch);
+    params.set('limit',ARCHIVE_SHOW);
     const data=await api('GET',`/archive?${params}`);
     if(myRequest!==archiveRequest || !document.getElementById('archive-results')) return;
     const{results,total}=data;
+    // True totals (the lists may be cut to ARCHIVE_SHOW). Older servers sent no counts.
+    const counts=data.counts||{racks:results.racks.length,boxes:results.boxes.length,vials:results.vials.length};
+    // Shown under a list that was cut short.
+    const moreNote=(shown,all)=>shown<all
+      ?`<div class="empty-state" style="padding:10px;font-size:11px">Showing the ${shown} most recently archived of ${all.toLocaleString()} — ${archiveSearch?'refine the search':'search'} to find older ones.</div>`:'';
 
     const fmtArchived=d=>d?new Date(d).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
 
     const pills=[
-      {key:'all',   label:'All',   count:results.racks.length+results.boxes.length+results.vials.length},
-      {key:'rack',  label:'Racks', count:results.racks.length},
-      {key:'box',   label:'Boxes', count:results.boxes.length},
-      {key:'vial',  label:'Vials', count:results.vials.length},
-    ].map(p=>`<button class="filter-pill ${archiveFilter===p.key?'active':''}" onclick="setArchiveFilter('${p.key}')">${p.label}<span class="pill-count">${p.count}</span></button>`).join('');
+      {key:'all',   label:'All',   count:counts.racks+counts.boxes+counts.vials},
+      {key:'rack',  label:'Racks', count:counts.racks},
+      {key:'box',   label:'Boxes', count:counts.boxes},
+      {key:'vial',  label:'Vials', count:counts.vials},
+    ].map(p=>`<button class="filter-pill ${archiveFilter===p.key?'active':''}" onclick="setArchiveFilter('${p.key}')">${p.label}<span class="pill-count">${p.count.toLocaleString()}</span></button>`).join('');
 
       let rows='';
 
       if((archiveFilter==='all'||archiveFilter==='rack')&&results.racks.length){
-        rows+=`<div class="results-section"><div class="results-section-title">Racks <span class="count-badge rack-count-badge">${results.racks.length}</span></div>`;
+        rows+=`<div class="results-section"><div class="results-section-title">Racks <span class="count-badge rack-count-badge">${counts.racks.toLocaleString()}</span></div>`;
         for(const r of results.racks){
           rows+=`<div class="result-card">
             <div class="result-icon rack">RK</div>
@@ -2227,11 +2221,11 @@ async function fetchArchive(){
             </div>
           </div>`;
         }
-        rows+=`</div>`;
+        rows+=moreNote(results.racks.length,counts.racks)+`</div>`;
       }
 
       if((archiveFilter==='all'||archiveFilter==='box')&&results.boxes.length){
-        rows+=`<div class="results-section"><div class="results-section-title">Boxes <span class="count-badge box-count-badge">${results.boxes.length}</span></div>`;
+        rows+=`<div class="results-section"><div class="results-section-title">Boxes <span class="count-badge box-count-badge">${counts.boxes.toLocaleString()}</span></div>`;
         for(const b of results.boxes){
           rows+=`<div class="result-card">
             <div class="result-icon box">BX</div>
@@ -2244,11 +2238,11 @@ async function fetchArchive(){
             </div>
           </div>`;
         }
-        rows+=`</div>`;
+        rows+=moreNote(results.boxes.length,counts.boxes)+`</div>`;
       }
 
       if((archiveFilter==='all'||archiveFilter==='vial')&&results.vials.length){
-        rows+=`<div class="results-section"><div class="results-section-title">Vials <span class="count-badge vial-count-badge">${results.vials.length}</span></div>`;
+        rows+=`<div class="results-section"><div class="results-section-title">Vials <span class="count-badge vial-count-badge">${counts.vials.toLocaleString()}</span></div>`;
         for(const v of results.vials){
           rows+=`<div class="result-card">
             <div class="result-icon vial">${escHtml(v.position_label||'—')}</div>
@@ -2262,16 +2256,18 @@ async function fetchArchive(){
             </div>
           </div>`;
         }
-        rows+=`</div>`;
+        rows+=moreNote(results.vials.length,counts.vials)+`</div>`;
       }
 
     document.getElementById('archive-sub').textContent =
-      archiveSearch ? `${total} match${total!==1?'es':''} for "${archiveSearch}"`
-                    : `${total} archived item${total!==1?'s':''}`;
+      archiveSearch ? `${total.toLocaleString()} match${total!==1?'es':''} for "${archiveSearch}"`
+                    : `${total.toLocaleString()} archived item${total!==1?'s':''}`;
     document.getElementById('archive-pills').innerHTML=pills;
-    document.getElementById('archive-results').innerHTML = total===0
+    document.getElementById('archive-results').innerHTML = !rows
       ? (archiveSearch
-          ? `<div class="empty-state">No archived items match "${escHtml(archiveSearch)}".</div>`
+          ? `<div class="empty-state">No archived ${archiveFilter==='all'?'items':{rack:'racks',box:'boxes',vial:'vials'}[archiveFilter]} match "${escHtml(archiveSearch)}".</div>`
+          : total>0
+          ? `<div class="empty-state">No archived ${{rack:'racks',box:'boxes',vial:'vials'}[archiveFilter]||'items'}.</div>`
           : `<div class="empty-state">No archived items.<br><span style="font-size:10px">Enable "Archive on delete" in Settings to keep deleted items recoverable.</span></div>`)
       : rows;
   }catch(e){toast(e.message,'err');}
@@ -3042,14 +3038,15 @@ async function doAutoFill(rackId){
 // ＋ VIAL at rack level: pick a box, then add to the first empty cell
 async function quickAddVial(){
   if(!curRack){ toast('No rack selected', 'err'); return; }
-  const boxes = await api('GET', `/racks/${curRack.id}/boxes`).catch(()=>[]);
+  // The slots endpoint returns each box with its active vial count.
+  const {slots=[]} = await api('GET', `/racks/${curRack.id}/slots`).catch(()=>({slots:[]}));
+  const boxes = slots.filter(sl=>sl.box).map(sl=>sl.box);
   if(!boxes.length){ toast('No boxes in this rack — place a box first', 'err'); return; }
 
   // Find boxes that have at least one empty cell
   const available = [];
   for(const b of boxes){
-    const {vials} = await api('GET', `/boxes/${b.id}/vials`).catch(()=>({vials:[]}));
-    const used = vials.filter(v=>!v.archived_at).length;
+    const used = b.vial_count || 0;
     const cap  = b.rows * b.cols;
     if(used < cap) available.push({ ...b, used, cap });
   }

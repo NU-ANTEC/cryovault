@@ -25,52 +25,69 @@ const colLabel = i => String(i + 1).padStart(2, '0');
 // =============================================================================
 // GET /api/archive
 // =============================================================================
-// Returns all archived racks, boxes, and vials, with their location context.
+// Returns archived racks, boxes, and vials, most recently archived first,
+// with their location context.
 // Optional query params:
 //   ?type=rack|box|vial   — filter to one entity type
-//   ?q=search             — substring search on name
+//   ?q=search             — substring search (names; for vials also
+//                           researcher and sample type)
+//   ?limit=N              — at most N items per type (the page asks for 200,
+//                           so a large archive doesn't load all at once)
+//
+// Response: { total, counts: { racks, boxes, vials }, limited, results }
+//   counts / total are the full number of matches of every type (even with
+//   ?type, and even when the lists in results were cut to `limit`); limited
+//   is true if a returned list was cut.
 // =============================================================================
 router.get('/archive', (req, res) => {
   const type    = req.query.type || '';
   const q       = (req.query.q || '').trim();
   const pattern = q ? `%${q}%` : '%';
+  const limitN  = parseInt(req.query.limit, 10);
+  const limit   = Number.isInteger(limitN) && limitN > 0 ? limitN : -1;   // -1 = no limit in SQLite
 
   const results = { racks: [], boxes: [], vials: [] };
+  const counts  = { racks: 0, boxes: 0, vials: 0 };
 
-  if (!type || type === 'rack') {
-    results.racks = db.prepare(`
-      SELECT r.*, t.name AS tank_name
-      FROM   racks r
-      JOIN   tanks t ON t.id = r.tank_id
-      WHERE  r.archived_at IS NOT NULL
-        AND  r.name LIKE ?
+  // Counts are computed for every type (so the filter pills always show
+  // them); lists only for the selected type.
+  {
+    const where = `FROM racks r JOIN tanks t ON t.id = r.tank_id
+                   WHERE r.archived_at IS NOT NULL AND r.name LIKE ?`;
+    counts.racks  = db.prepare(`SELECT COUNT(*) AS c ${where}`).get(pattern).c;
+    if (!type || type === 'rack') results.racks = db.prepare(`
+      SELECT r.*, t.name AS tank_name ${where}
       ORDER  BY r.archived_at DESC
-    `).all(pattern);
+      LIMIT  ?
+    `).all(pattern, limit);
   }
 
-  if (!type || type === 'box') {
-    results.boxes = db.prepare(`
-      SELECT b.*, r.name AS rack_name, r.id AS rack_id_fk
-      FROM   boxes b
-      JOIN   racks r ON r.id = b.rack_id
-      WHERE  b.archived_at IS NOT NULL
-        AND  b.name LIKE ?
+  {
+    const where = `FROM boxes b JOIN racks r ON r.id = b.rack_id
+                   WHERE b.archived_at IS NOT NULL AND b.name LIKE ?`;
+    counts.boxes  = db.prepare(`SELECT COUNT(*) AS c ${where}`).get(pattern).c;
+    if (!type || type === 'box') results.boxes = db.prepare(`
+      SELECT b.*, r.name AS rack_name, r.id AS rack_id_fk ${where}
       ORDER  BY b.archived_at DESC
-    `).all(pattern);
+      LIMIT  ?
+    `).all(pattern, limit);
   }
 
-  if (!type || type === 'vial') {
-    const vials = db.prepare(`
+  {
+    const where = `FROM vials v
+                   JOIN boxes b ON b.id = v.box_id
+                   JOIN racks r ON r.id = b.rack_id
+                   WHERE v.archived_at IS NOT NULL
+                     AND (v.name LIKE ? OR v.researcher LIKE ? OR v.sample_type LIKE ?)`;
+    counts.vials = db.prepare(`SELECT COUNT(*) AS c ${where}`).get(pattern, pattern, pattern).c;
+    const vials = (type && type !== 'vial') ? [] : db.prepare(`
       SELECT v.*,
              b.name AS box_name, b.id AS box_id_fk, b.slot_position AS box_slot,
              r.name AS rack_name, r.id AS rack_id_fk
-      FROM   vials v
-      JOIN   boxes b ON b.id = v.box_id
-      JOIN   racks r ON r.id = b.rack_id
-      WHERE  v.archived_at IS NOT NULL
-        AND  (v.name LIKE ? OR v.researcher LIKE ? OR v.sample_type LIKE ?)
+      ${where}
       ORDER  BY v.archived_at DESC
-    `).all(pattern, pattern, pattern);
+      LIMIT  ?
+    `).all(pattern, pattern, pattern, limit);
 
     results.vials = vials.map(v => ({
       ...v,
@@ -81,8 +98,12 @@ router.get('/archive', (req, res) => {
     }));
   }
 
-  const total = results.racks.length + results.boxes.length + results.vials.length;
-  res.json({ total, results });
+  const total   = counts.racks + counts.boxes + counts.vials;
+  const shown   = t => !type || type === t;
+  const limited = (shown('rack') && results.racks.length < counts.racks)
+               || (shown('box')  && results.boxes.length < counts.boxes)
+               || (shown('vial') && results.vials.length < counts.vials);
+  res.json({ total, counts, limited, results });
 });
 
 
