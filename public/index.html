@@ -2149,27 +2149,67 @@ async function wfSaveVial(){
 }
 
 // ── ARCHIVE VIEW ──────────────────────────────────────────────────────────────
+// The page (header, search box, filter pills, results) is built once; typing
+// in the search box or clicking a filter only re-renders the pills and the
+// results, so the search box keeps its focus and text. The filter and search
+// live at module level, so they survive a restore (which re-renders the view).
+let archiveFilter='all', archiveSearch='', archiveSearchTimer=null, archiveRequest=0;
+
 async function renderArchive(){
   showLoading();
   const el=document.getElementById('main-content');
-  let archiveFilter='all', archiveSearch='';
+  el.innerHTML=`
+    <div class="section-header">
+      <div class="section-left">
+        <div class="section-title">Archive</div>
+        <div class="section-sub" id="archive-sub">&nbsp;</div>
+      </div>
+      <div class="section-right">
+        <button class="btn btn-danger" onclick="openPurgeModal()">✕ PURGE ARCHIVE</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <input class="form-input" id="archive-search" style="flex:1;max-width:260px" placeholder="Search archived items…"
+        value="${escHtml(archiveSearch)}" oninput="setArchiveSearch(this.value)"/>
+    </div>
+    <div class="search-filters" id="archive-pills"></div>
+    <div id="archive-results"></div>`;
+  try{ await fetchArchive(); } finally { hideLoading(); }
+}
 
-  async function fetchAndRender(){
-    try{
-      const params=new URLSearchParams();
-      if(archiveFilter!=='all') params.set('type',archiveFilter);
-      if(archiveSearch) params.set('q',archiveSearch);
-      const data=await api('GET',`/archive?${params}`);
-      const{results,total}=data;
+// Debounced: waits until typing pauses for 250 ms before asking the server.
+function setArchiveSearch(value){
+  archiveSearch=value.trim();
+  clearTimeout(archiveSearchTimer);
+  archiveSearchTimer=setTimeout(fetchArchive, 250);
+}
 
-      const fmtArchived=d=>d?new Date(d).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+function setArchiveFilter(f){
+  archiveFilter=f;
+  fetchArchive();
+}
 
-      const pills=[
-        {key:'all',   label:'All',   count:total},
-        {key:'rack',  label:'Racks', count:results.racks.length},
-        {key:'box',   label:'Boxes', count:results.boxes.length},
-        {key:'vial',  label:'Vials', count:results.vials.length},
-      ].map(p=>`<button class="filter-pill ${archiveFilter===p.key?'active':''}" onclick="setArchiveFilter('${p.key}')">${p.label}<span class="pill-count">${p.count}</span></button>`).join('');
+async function fetchArchive(){
+  const results_el=document.getElementById('archive-results');
+  if(!results_el) return;                       // user navigated away
+  // Responses can arrive out of order while typing; only draw the latest.
+  const myRequest=++archiveRequest;
+  try{
+    const params=new URLSearchParams();
+    if(archiveFilter!=='all') params.set('type',archiveFilter);
+    if(archiveSearch) params.set('q',archiveSearch);
+    const data=await api('GET',`/archive?${params}`);
+    if(myRequest!==archiveRequest || !document.getElementById('archive-results')) return;
+    const{results,total}=data;
+
+    const fmtArchived=d=>d?new Date(d).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+
+    const pills=[
+      {key:'all',   label:'All',   count:results.racks.length+results.boxes.length+results.vials.length},
+      {key:'rack',  label:'Racks', count:results.racks.length},
+      {key:'box',   label:'Boxes', count:results.boxes.length},
+      {key:'vial',  label:'Vials', count:results.vials.length},
+    ].map(p=>`<button class="filter-pill ${archiveFilter===p.key?'active':''}" onclick="setArchiveFilter('${p.key}')">${p.label}<span class="pill-count">${p.count}</span></button>`).join('');
 
       let rows='';
 
@@ -2225,30 +2265,16 @@ async function renderArchive(){
         rows+=`</div>`;
       }
 
-      el.innerHTML=`
-        <div class="section-header">
-          <div class="section-left">
-            <div class="section-title">Archive</div>
-            <div class="section-sub">${total} archived item${total!==1?'s':''}</div>
-          </div>
-          <div class="section-right">
-            <button class="btn btn-danger" onclick="openPurgeModal()">✕ PURGE ARCHIVE</button>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-          <input class="form-input" style="flex:1;max-width:260px" placeholder="Search archived items…"
-            value="${escHtml(archiveSearch)}" oninput="archiveSearch=this.value;fetchAndRender()"/>
-        </div>
-        <div class="search-filters">${pills}</div>
-        ${total===0
-          ?`<div class="empty-state">No archived items.<br><span style="font-size:10px">Enable "Archive on delete" in Settings to keep deleted items recoverable.</span></div>`
-          :rows}`;
-    }catch(e){toast(e.message,'err');}finally{hideLoading();}
-  }
-
-  // Make filter setter accessible from onclick
-  window.setArchiveFilter=f=>{archiveFilter=f;showLoading();fetchAndRender();};
-  await fetchAndRender();
+    document.getElementById('archive-sub').textContent =
+      archiveSearch ? `${total} match${total!==1?'es':''} for "${archiveSearch}"`
+                    : `${total} archived item${total!==1?'s':''}`;
+    document.getElementById('archive-pills').innerHTML=pills;
+    document.getElementById('archive-results').innerHTML = total===0
+      ? (archiveSearch
+          ? `<div class="empty-state">No archived items match "${escHtml(archiveSearch)}".</div>`
+          : `<div class="empty-state">No archived items.<br><span style="font-size:10px">Enable "Archive on delete" in Settings to keep deleted items recoverable.</span></div>`)
+      : rows;
+  }catch(e){toast(e.message,'err');}
 }
 
 async function restoreItem(entityType,entityId,name){
