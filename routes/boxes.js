@@ -76,18 +76,20 @@ function validateSlot(rackId, slotPosition, excludeBoxId = null) {
   }
 
   // ── Occupancy check ───────────────────────────────────────────────────────
-  // Look for any box in this rack already at this position, optionally
+  // Look for an ACTIVE box in this rack already at this position, optionally
   // excluding the box being updated (so a no-op position update is allowed).
+  // Archived boxes keep their old slot number for the record but don't
+  // occupy the slot (see ux_boxes_active_slot in db.js).
   let occupant;
   if (excludeBoxId) {
     occupant = db.prepare(`
       SELECT id, name FROM boxes
-      WHERE  rack_id = ? AND slot_position = ? AND id != ?
+      WHERE  rack_id = ? AND slot_position = ? AND archived_at IS NULL AND id != ?
     `).get(rackId, pos, excludeBoxId);
   } else {
     occupant = db.prepare(`
       SELECT id, name FROM boxes
-      WHERE  rack_id = ? AND slot_position = ?
+      WHERE  rack_id = ? AND slot_position = ? AND archived_at IS NULL
     `).get(rackId, pos);
   }
 
@@ -245,18 +247,20 @@ router.put('/boxes/:id', (req, res) => {
   const dimError = validateGridDims(newRows, newCols);
   if (dimError) return res.status(400).json({ error: dimError });
 
-  // Delete vials that fall outside the new grid bounds
+  // Delete ACTIVE vials that fall outside the new grid bounds. Archived vials
+  // there are kept as records (they can't be restored while their position is
+  // outside the grid — see /archive/restore).
   let deletedVials = 0;
   if (newRows < existing.rows || newCols < existing.cols) {
     const count = db.prepare(`
       SELECT COUNT(*) as c FROM vials
-      WHERE  box_id = ? AND (row_index >= ? OR col_index >= ?)
+      WHERE  box_id = ? AND (row_index >= ? OR col_index >= ?) AND archived_at IS NULL
     `).get(req.params.id, newRows, newCols).c;
 
     if (count > 0) {
       db.prepare(`
         DELETE FROM vials
-        WHERE  box_id = ? AND (row_index >= ? OR col_index >= ?)
+        WHERE  box_id = ? AND (row_index >= ? OR col_index >= ?) AND archived_at IS NULL
       `).run(req.params.id, newRows, newCols);
       deletedVials = count;
     }

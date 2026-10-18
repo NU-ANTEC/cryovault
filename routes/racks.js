@@ -161,6 +161,7 @@ router.put('/racks/:id', (req, res) => {
       FROM   boxes
       WHERE  rack_id       = ?
         AND  slot_position > ?
+        AND  archived_at IS NULL   -- archived boxes don't occupy a slot
       ORDER  BY slot_position
     `).all(req.params.id, newCapacity);
 

@@ -9,6 +9,13 @@
 // This is called a "position-based" or "coordinate" API. It mirrors how
 // a lab scientist thinks: "vial at position B03 in box BOX-001".
 //
+// ARCHIVED VIALS
+//   An archived (soft-deleted) vial keeps its box/row/col for the record, but
+//   it does not occupy the cell: the database allows at most one ACTIVE vial
+//   per position (partial unique index ux_vials_active_position in db.js).
+//   So "the vial at B03" always means the active one, and every query below
+//   that addresses a position filters on archived_at IS NULL.
+//
 // UPSERT PATTERN
 //   PUT creates a vial if the position is empty, or overwrites it if not.
 //   This is called an "upsert" (update + insert). It simplifies the client:
@@ -112,35 +119,30 @@ router.put('/boxes/:boxId/vials/:row/:col', (req, res) => {
 
   try {
     const upsert = db.transaction(() => {
+      // Only the ACTIVE vial counts as occupying the cell. Archived vials that
+      // used to sit here stay in the table as records (searchable, restorable)
+      // and are never touched by placing a new vial.
       const existing = db.prepare(`
         SELECT * FROM vials
-        WHERE box_id = ? AND row_index = ? AND col_index = ?
+        WHERE box_id = ? AND row_index = ? AND col_index = ? AND archived_at IS NULL
       `).get(req.params.boxId, row, col);
 
       if (existing) {
-        // UPDATE — vial already occupies this position (may be archived).
-        // Always clear archived_at so that placing a vial at a previously
-        // archived position makes it live again. Without this, a soft-deleted
-        // vial would silently block the slot: the GET filters by
-        // "archived_at IS NULL" so the frontend sees the cell as empty, but
-        // the UNIQUE constraint (box_id, row_index, col_index) means no fresh
-        // INSERT can succeed — the archived row is still there.
+        // UPDATE — an active vial already occupies this position (an edit).
         db.prepare(`
           UPDATE vials
           SET name = ?, sample_type = ?, date_stored = ?, volume = ?,
               concentration = ?, researcher = ?, qr_code = ?, passage = ?, notes = ?,
-              updated_at = ?, archived_at = NULL
-          WHERE box_id = ? AND row_index = ? AND col_index = ?
+              updated_at = ?
+          WHERE id = ?
         `).run(
           name.trim(), sample_type, date_stored, volume,
           concentration, researcher, qr_code || null, passage || null, notes,
           now,
-          req.params.boxId, row, col
+          existing.id
         );
 
-        const updated = db.prepare(`
-          SELECT * FROM vials WHERE box_id = ? AND row_index = ? AND col_index = ?
-        `).get(req.params.boxId, row, col);
+        const updated = db.prepare('SELECT * FROM vials WHERE id = ?').get(existing.id);
 
         logAudit({
           entityType: 'vial', entityId: updated.id, entityName: updated.name,
@@ -226,7 +228,9 @@ router.delete('/boxes/:boxId/vials/:row/:col', (req, res) => {
   }
 
   logAudit({ entityType:'vial', entityId:vial.id, entityName:vial.name, action:'delete', changedBy, oldData:vial, context:{ box_id:req.params.boxId, row, col } });
-  db.prepare(`DELETE FROM vials WHERE box_id = ? AND row_index = ? AND col_index = ?`).run(req.params.boxId, row, col);
+  // Delete by id: archived vials that once sat at this position are separate
+  // records and must not be deleted along with the active one.
+  db.prepare('DELETE FROM vials WHERE id = ?').run(vial.id);
   res.json({ deleted: true, row, col });
 });
 
@@ -291,6 +295,11 @@ router.get('/vials/by-qr', (req, res) => {
     JOIN   boxes b ON b.id = v.box_id
     JOIN   racks r ON r.id = b.rack_id
     WHERE  v.qr_code = ?
+      -- Only ACTIVE vials. An archived vial isn't in storage, and its cell may
+      -- now hold a different vial: the scan workflow removes "the vial at
+      -- this position", so matching an archived record here could delete the
+      -- wrong sample. A reused label finds only the vial that carries it now.
+      AND  v.archived_at IS NULL
     LIMIT  1
   `).get(code);
 

@@ -71,8 +71,10 @@ router.post('/vials/move', (req, res) => {
       db.prepare(`
         UPDATE vials
         SET box_id = ?, row_index = ?, col_index = ?, updated_at = ?
-        WHERE box_id = ? AND row_index = ? AND col_index = ?
-      `).run(target_box_id, tr, tc, now, source_box_id, sr, sc);
+        WHERE id = ?
+      `).run(target_box_id, tr, tc, now, vial.id);
+      // (By id, not by position: archived vials that once sat at the source
+      // position are separate records and must stay where they were.)
 
       const moved = db.prepare(`SELECT * FROM vials WHERE id = ?`).get(vial.id);
 

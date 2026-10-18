@@ -135,6 +135,40 @@ git pull
 bash run.sh update
 ```
 
+#### Upgrading to "one active vial per position" (database change)
+
+Older versions let an archived vial or box keep blocking its position, so a
+cell could look empty but refuse a new vial. This version changes the rule to
+one *active* vial per position and one *active* box per slot. It converts the
+database by itself on first start. For this upgrade, use the upgrade script
+instead of `run.sh update`, because it backs everything up first and checks
+the result:
+
+```bash
+git pull
+bash deploy/scripts/upgrade.sh
+```
+
+It builds the new image, stops the app for about a minute, and writes to
+`backups/upgrade-<time>/`:
+
+| File | What it is |
+|------|------------|
+| `cryovault.db` | Exact copy of the database file |
+| `cryovault-export.json` | Complete JSON snapshot (all tanks, archived items included), importable from **Admin → Data Import → JSON → Replace** |
+| `cryovault-history.json` | Full change history |
+| `bug-report.txt` | Vials affected by the old bug (added but hidden, or archived records that were overwritten) |
+
+Then it starts the new version and checks that the counts match and the
+conversion happened. To undo the upgrade (database and code):
+
+```bash
+bash deploy/scripts/upgrade.sh --rollback backups/upgrade-<time>
+```
+
+Even without the script, the app saves an unconverted copy of the database
+next to it (`cryovault.db.pre-active-unique-<time>.bak`) before converting.
+
 ---
 
 ## Quick Start (Development — no Docker)
@@ -153,7 +187,9 @@ npm run dev
 cryovault/
 │
 ├── server.js                    # Express app — entry point
-├── db.js                        # SQLite setup, schema, audit helper
+├── db.js                        # SQLite setup, schema, migrations, audit helper
+├── lib/
+│   └── dbtools.js               # Snapshot/backup/verify tools (used by export + upgrade.sh)
 ├── package.json                 # Dependencies and npm scripts
 │
 ├── routes/
@@ -174,6 +210,7 @@ cryovault/
 │   └── scripts/
 │       ├── setup.sh             # One-time server provisioning script
 │       ├── deploy.sh            # Manual deployment with rollback
+│       ├── upgrade.sh           # Back up, upgrade and verify (database changes)
 │       └── backup.sh            # Database backup (run via cron)
 │
 ├── .github/
@@ -436,9 +473,9 @@ All endpoints are prefixed with `/api`.
 ### Import / Export
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/export` | Download full JSON snapshot |
+| `GET` | `/export` | Download full JSON snapshot (format 2.0: all tanks, every column, archived items included) |
 | `GET` | `/export/history` | Download full audit log |
-| `POST` | `/import` | Import JSON (`{ data, mode, changedBy }`) |
+| `POST` | `/import` | Import JSON (`{ data, mode, changedBy }`). `replace` restores the file exactly; `merge` adds missing active items. Accepts format 1.0 and 2.0 files. |
 
 ### Health
 | Method | Path | Description |

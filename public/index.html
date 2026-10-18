@@ -3103,7 +3103,8 @@ async function quickDeleteVialLookup(){
   const code = (document.getElementById('qd-code')?.value||'').trim();
   if(!code){ toast('Enter a code value', 'err'); return; }
   try{
-    const vial = await api('GET', `/vials/by-qr?code=${encodeURIComponent(code)}`);
+    // The lookup returns { vial, box, rack, path, ... } (404 if no active vial has this code).
+    const { vial } = await api('GET', `/vials/by-qr?code=${encodeURIComponent(code)}`);
     if(!vial || !vial.id){ toast('Vial not found', 'err'); return; }
     closeModal();
     // Re-use the existing confirmRemoveVial flow by navigating to the vial's box

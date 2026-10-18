@@ -618,7 +618,8 @@ async function importJson() {
     const s = result.stats || {};
     hint.style.color = 'var(--success)';
     hint.textContent = `✓ Done — ${s.racks||0} racks, ${s.boxes||0} boxes, ${s.vials||0} vials imported` +
-                       (s.skipped ? `, ${s.skipped} skipped` : '');
+                       (s.skipped ? `, ${s.skipped} skipped` : '') +
+                       (s.warnings && s.warnings.length ? ` — ${s.warnings.join('; ')}` : '');
     toast('JSON import complete');
     if (btn) { btn.textContent = '✓ DONE'; btn.disabled = false; }
   } catch(e) {

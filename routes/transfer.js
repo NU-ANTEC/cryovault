@@ -20,81 +20,43 @@
 //
 // IMPORT MODES
 //   merge   — Adds racks/boxes/vials that don't already exist (by name).
-//             Existing records are untouched. Safe for incremental updates.
-//   replace — Deletes everything in the current tank and reimports from scratch.
-//             Use for full restores from a backup. DESTRUCTIVE.
+//             Existing records are untouched. Archived items in the file are
+//             skipped (merge adds inventory; it doesn't add history).
+//   replace — Restores the file exactly: same IDs, slot positions, archive
+//             state and timestamps. For a format 2.0 file this replaces ALL
+//             tanks; for a format 1.0 file (one tank), the first tank's
+//             contents. Use for full restores from a backup. DESTRUCTIVE.
+//
+// EXPORT FORMATS
+//   2.0 (this version) — every tank, every column, archived items included.
+//                        Built by lib/dbtools.js (also used for upgrade backups).
+//   1.0 (older)        — first tank only, under top-level "tank" + "racks".
+//                        Still accepted by import.
 // =============================================================================
 
 const express    = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { db, logAudit } = require('../db');
+const { buildSnapshot, buildHistory } = require('../lib/dbtools');
 
 const router = express.Router();
-
-// Version tag embedded in every export.
-// If the format ever changes (new fields, restructured nesting), bump this
-// number so import code can detect and handle old vs new formats.
-const EXPORT_FORMAT_VERSION = '1.0';
 
 
 // =============================================================================
 // GET /api/export
 // =============================================================================
-// Generates a complete JSON snapshot of the entire tank inventory.
-// The response is sent with a Content-Disposition: attachment header, which
-// tells the browser to download it as a file rather than displaying it.
-//
-// The export is a single self-contained object — all racks, all boxes,
-// all vials — so no additional API calls are needed to reconstruct the state.
+// Generates a complete JSON snapshot of the inventory: all tanks, racks,
+// boxes and vials, including archived items. The response is sent with a
+// Content-Disposition: attachment header, which tells the browser to
+// download it as a file rather than displaying it.
 // =============================================================================
-router.get('/export', (req, res) => {
-  // We assume one tank per deployment (the default setup).
-  const tank = db.prepare('SELECT * FROM tanks LIMIT 1').get();
-  if (!tank) return res.status(404).json({ error: 'No tank configured' });
-
-  const racks = db.prepare(`
-    SELECT * FROM racks WHERE tank_id = ? ORDER BY name
-  `).all(tank.id);
-
-  // Build the nested snapshot: tank → racks → boxes → vials
-  const snapshot = {
-    // _meta provides context for whoever receives this file —
-    // when it was made, which version of the format it uses, and which tank.
-    _meta: {
-      format:      'cryovault-export',
-      version:     EXPORT_FORMAT_VERSION,
-      exported_at: new Date().toISOString(),
-      source_tank: tank.name
-    },
-    tank,
-    racks: racks.map(rack => {
-      const boxes = db.prepare(`
-        SELECT * FROM boxes WHERE rack_id = ? ORDER BY name
-      `).all(rack.id);
-
-      return {
-        ...rack,
-        boxes: boxes.map(box => {
-          const vials = db.prepare(`
-            SELECT * FROM vials WHERE box_id = ? ORDER BY row_index, col_index
-          `).all(box.id);
-
-          return { ...box, vials };
-        })
-      };
-    })
-  };
+router.get('/export', (_req, res) => {
+  const snapshot = buildSnapshot(db);
 
   // Construct a timestamped filename so sequential exports don't overwrite each other
   const filename = `cryovault-export-${Date.now()}.json`;
-
-  // Content-Disposition: attachment tells the browser "save this as a file"
-  // Content-Type: application/json tells it what kind of file it is
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.setHeader('Content-Type', 'application/json');
-
-  // res.json() serializes the object and sends it. The 3rd argument to
-  // JSON.stringify (2) pretty-prints with 2-space indentation — readable by humans.
   res.status(200).json(snapshot);
 });
 
@@ -106,33 +68,17 @@ router.get('/export', (req, res) => {
 // Useful for archiving, compliance, or feeding into external analytics tools.
 // =============================================================================
 router.get('/export/history', (_req, res) => {
-  const rows = db.prepare(`
-    SELECT * FROM audit_log ORDER BY timestamp DESC
-  `).all();
-
-  // Parse stored JSON strings back into objects for readability
-  const entries = rows.map(row => ({
-    ...row,
-    old_data: row.old_data ? JSON.parse(row.old_data) : null,
-    new_data: row.new_data ? JSON.parse(row.new_data) : null,
-    context:  row.context  ? JSON.parse(row.context)  : null
-  }));
-
   const filename = `cryovault-history-${Date.now()}.json`;
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.setHeader('Content-Type', 'application/json');
-  res.json({
-    exported_at: new Date().toISOString(),
-    total:       entries.length,
-    entries
-  });
+  res.json(buildHistory(db));
 });
 
 
 // =============================================================================
 // POST /api/import
 // =============================================================================
-// Imports data from a previously exported JSON file.
+// Imports data from a previously exported JSON file (format 1.0 or 2.0).
 //
 // Request body (JSON):
 //   {
@@ -142,8 +88,56 @@ router.get('/export/history', (_req, res) => {
 //   }
 //
 // Response:
-//   { success: true, mode, stats: { racks, boxes, vials, skipped } }
+//   { success: true, mode, format, stats: { tanks, racks, boxes, vials, skipped, warnings } }
 // =============================================================================
+
+// ── Import helpers ───────────────────────────────────────────────────────────
+
+// Column names of a table, read from the live schema.
+const columnCache = {};
+function columnsOf(table) {
+  if (!columnCache[table]) {
+    columnCache[table] = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+  }
+  return columnCache[table];
+}
+
+// INSERT a row using whichever fields of `obj` are real columns of `table`.
+// Anything else in the object (the nested racks / boxes / vials arrays,
+// fields from a newer version) is ignored, and columns the file doesn't have
+// get their schema default. This is what lets the same code restore every
+// column of a 2.0 export and still accept older 1.0 files.
+function insertRow(table, obj) {
+  const cols = columnsOf(table).filter(c => obj[c] !== undefined);
+  db.prepare(`INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`)
+    .run(...cols.map(c => obj[c]));
+}
+
+// Keep the exported ID if nothing in the database uses it yet; otherwise
+// give the row a new one. Keeping IDs means the change history still points
+// at the right items after a restore.
+function keepOrNewId(table, id) {
+  if (id && !db.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(id)) return id;
+  return uuidv4();
+}
+
+// Both formats as a list of tanks, each with its racks nested inside.
+function tanksFromExport(data) {
+  if (Array.isArray(data.tanks)) return { format: '2.0', tanks: data.tanks };
+  if (Array.isArray(data.racks)) {
+    return { format: '1.0', tanks: [{ ...(data.tank || {}), name: (data.tank && data.tank.name) || data._meta.source_tank, racks: data.racks }] };
+  }
+  throw new Error('The file contains no tanks or racks');
+}
+
+// For a 1.0 file (one tank, no tank list): the tank it came from if one with
+// that name exists here, otherwise the first tank — what older versions did.
+function targetTankForV1(sourceName) {
+  return (sourceName && db.prepare('SELECT * FROM tanks WHERE name = ?').get(sourceName))
+      || db.prepare('SELECT * FROM tanks ORDER BY rowid LIMIT 1').get();
+}
+
+
 router.post('/import', (req, res) => {
   const { data, mode = 'merge', changedBy = 'import' } = req.body;
 
@@ -162,143 +156,178 @@ router.post('/import', (req, res) => {
     return res.status(400).json({ error: 'mode must be "merge" or "replace"' });
   }
 
-  // Stats counter — we'll report how many records were created vs skipped
-  const stats = { racks: 0, boxes: 0, vials: 0, skipped: 0 };
+  let parsed;
+  try { parsed = tanksFromExport(data); }
+  catch (e) { return res.status(400).json({ error: e.message }); }
+  const { format, tanks } = parsed;
+
+  if (format === '2.0' && mode === 'replace' && tanks.length === 0) {
+    return res.status(400).json({ error: 'The file contains no tanks — refusing to replace everything with nothing' });
+  }
+  if (format === '1.0' && !targetTankForV1(tanks[0].name)) {
+    return res.status(500).json({ error: 'No tank found in the database' });
+  }
+
+  const stats = { tanks: 0, racks: 0, boxes: 0, vials: 0, skipped: 0, warnings: [] };
   const now   = new Date().toISOString();
 
-  // Get the target tank (the one already in the database)
-  const tank = db.prepare('SELECT * FROM tanks LIMIT 1').get();
-  if (!tank) return res.status(500).json({ error: 'No tank found in the database' });
+  // Plain row objects, without the nested child arrays.
+  const plain = ({ racks, boxes, vials, ...row }) => row;
 
-  // ── Wrap the entire import in a database transaction ──────────────────────
-  // A transaction means: either ALL the inserts succeed, or NONE of them do.
-  // If anything fails partway through, SQLite automatically rolls back every
-  // change made so far, leaving the database in its original clean state.
-  // Without a transaction, a failure partway through would leave partial data.
-  //
-  // better-sqlite3's  db.transaction()  creates a function that wraps its
-  // body in BEGIN / COMMIT / ROLLBACK automatically.
-  const doImport = db.transaction(() => {
+  // ── REPLACE: restore the file exactly ─────────────────────────────────────
+  // Same IDs, same slot positions, same archive state, same timestamps.
+  const restoreTank = (tank, tankId) => {
+    for (const rack of (tank.racks || [])) {
+      const rackId = keepOrNewId('racks', rack.id);
+      insertRow('racks', { ...plain(rack), id: rackId, tank_id: tankId,
+        created_at: rack.created_at || now, updated_at: rack.updated_at || now });
+      stats.racks++;
 
-    // ── REPLACE MODE: clear existing data ───────────────────────────────────
-    // Delete all racks (ON DELETE CASCADE removes boxes and vials too).
-    if (mode === 'replace') {
-      db.prepare('DELETE FROM racks WHERE tank_id = ?').run(tank.id);
-      logAudit({
-        entityType: 'tank',
-        entityId:   tank.id,
-        entityName: tank.name,
-        action:     'update',
-        changedBy,
-        context:    { operation: 'replace-import-clear' }
-      });
-    }
-
-    // ── Process each rack in the import file ────────────────────────────────
-    for (const rack of (data.racks || [])) {
-
-      // In MERGE mode, check if a rack with this name already exists.
-      // If it does, we add boxes to it rather than creating a duplicate.
-      const existingRack = mode === 'merge'
-        ? db.prepare('SELECT id FROM racks WHERE tank_id = ? AND name = ?').get(tank.id, rack.name)
-        : null;
-
-      // Use the existing rack's ID, or generate a new one for a new rack
-      const targetRackId = existingRack ? existingRack.id : uuidv4();
-
-      if (!existingRack) {
-        // Insert the rack. Use the exported created_at date if available,
-        // falling back to now (so timestamps make sense for old exports).
-        db.prepare(`
-          INSERT INTO racks (id, tank_id, name, position, notes, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          targetRackId, tank.id, rack.name,
-          rack.position || '', rack.notes || '',
-          rack.created_at || now, now
-        );
-        logAudit({ entityType: 'rack', entityId: targetRackId, entityName: rack.name, action: 'create', changedBy, context: { source: 'import', mode } });
-        stats.racks++;
-      }
-      // If the rack already existed in merge mode, we silently proceed
-      // to process its boxes (they might be new even if the rack isn't).
-
-      // ── Process each box in this rack ─────────────────────────────────────
       for (const box of (rack.boxes || [])) {
+        const boxId = keepOrNewId('boxes', box.id);
+        insertRow('boxes', { ...plain(box), id: boxId, rack_id: rackId,
+          created_at: box.created_at || now, updated_at: box.updated_at || now });
+        stats.boxes++;
 
-        const existingBox = mode === 'merge'
-          ? db.prepare('SELECT id FROM boxes WHERE rack_id = ? AND name = ?').get(targetRackId, box.name)
-          : null;
-
-        const targetBoxId = existingBox ? existingBox.id : uuidv4();
-
-        if (!existingBox) {
-          db.prepare(`
-            INSERT INTO boxes (id, rack_id, name, rows, cols, qr_code, notes, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            targetBoxId, targetRackId, box.name,
-            box.rows, box.cols, box.qr_code || null,
-            box.notes || '', box.created_at || now, now
-          );
-          logAudit({ entityType: 'box', entityId: targetBoxId, entityName: box.name, action: 'create', changedBy, context: { source: 'import', mode, rack_id: targetRackId } });
-          stats.boxes++;
-        }
-
-        // ── Process each vial in this box ──────────────────────────────────
         for (const vial of (box.vials || [])) {
-
-          // In merge mode, skip vials at positions that are already occupied.
-          // This prevents accidental overwrites of existing samples.
-          const existingVial = db.prepare(`
-            SELECT id FROM vials
-            WHERE box_id = ? AND row_index = ? AND col_index = ?
-          `).get(targetBoxId, vial.row_index, vial.col_index);
-
-          if (existingVial && mode === 'merge') {
-            stats.skipped++;
-            continue;  // Skip this vial — position is already occupied
-          }
-
-          // In replace mode the box was just created so no vials exist.
-          // But if we're merging into an existing box, remove the old vial first.
-          if (existingVial) {
-            db.prepare('DELETE FROM vials WHERE id = ?').run(existingVial.id);
-          }
-
-          const vid = uuidv4();
-          db.prepare(`
-            INSERT INTO vials
-              (id, box_id, row_index, col_index, name, sample_type,
-               date_stored, volume, concentration, researcher, qr_code, notes,
-               created_at, updated_at)
-            VALUES
-              (?,  ?,      ?,         ?,         ?,    ?,
-               ?,           ?,      ?,             ?,          ?,       ?,
-               ?,          ?)
-          `).run(
-            vid, targetBoxId, vial.row_index, vial.col_index,
-            vial.name, vial.sample_type || '',
-            vial.date_stored || '', vial.volume || '',
-            vial.concentration || '', vial.researcher || '',
-            vial.qr_code || null, vial.notes || '',
-            vial.created_at || now, now
-          );
-
-          logAudit({ entityType: 'vial', entityId: vid, entityName: vial.name, action: 'create', changedBy, context: { source: 'import', mode, box_id: targetBoxId } });
+          insertRow('vials', { ...plain(vial), id: keepOrNewId('vials', vial.id), box_id: boxId,
+            created_at: vial.created_at || now, updated_at: vial.updated_at || now });
           stats.vials++;
         }
       }
     }
-  }); // end db.transaction()
+  };
 
-  // ── Execute the transaction ───────────────────────────────────────────────
+  const doReplace = () => {
+    if (format === '2.0') {
+      // Every tank is replaced. ON DELETE CASCADE removes racks, boxes, vials.
+      db.prepare('DELETE FROM tanks').run();
+      for (const tank of tanks) {
+        const tankId = keepOrNewId('tanks', tank.id);
+        insertRow('tanks', { ...plain(tank), id: tankId,
+          created_at: tank.created_at || now, updated_at: tank.updated_at || now });
+        stats.tanks++;
+        restoreTank(tank, tankId);
+      }
+    } else {
+      // A 1.0 file describes one tank: replace only that tank's contents.
+      const target = targetTankForV1(tanks[0].name);
+      db.prepare('DELETE FROM racks WHERE tank_id = ?').run(target.id);
+      restoreTank(tanks[0], target.id);
+    }
+
+    // One summary entry rather than one per restored item.
+    logAudit({
+      entityType: 'system', entityId: 'import', entityName: 'replace-import',
+      action: 'import', changedBy,
+      context: { mode, format, exported_at: data._meta.exported_at,
+                 tanks: stats.tanks, racks: stats.racks, boxes: stats.boxes, vials: stats.vials }
+    });
+  };
+
+  // ── MERGE: add what's missing, never touch what's there ───────────────────
+  const doMerge = () => {
+    for (const tank of tanks) {
+      // Find the target tank (by name for 2.0, creating it if needed).
+      let target;
+      if (format === '1.0') {
+        target = targetTankForV1(tank.name);
+      } else {
+        target = db.prepare('SELECT * FROM tanks WHERE name = ?').get(tank.name);
+        if (!target) {
+          const id = keepOrNewId('tanks', tank.id);
+          insertRow('tanks', { ...plain(tank), id, created_at: tank.created_at || now, updated_at: now });
+          target = db.prepare('SELECT * FROM tanks WHERE id = ?').get(id);
+          stats.tanks++;
+        }
+      }
+
+      for (const rack of (tank.racks || [])) {
+        // Merge adds inventory, not history: archived items are skipped.
+        if (rack.archived_at) { stats.skipped++; continue; }
+
+        let targetRack = db.prepare(`
+          SELECT * FROM racks WHERE tank_id = ? AND name = ? AND archived_at IS NULL
+        `).get(target.id, rack.name);
+
+        if (!targetRack) {
+          const id = keepOrNewId('racks', rack.id);
+          insertRow('racks', { ...plain(rack), id, tank_id: target.id,
+            created_at: rack.created_at || now, updated_at: now });
+          targetRack = db.prepare('SELECT * FROM racks WHERE id = ?').get(id);
+          logAudit({ entityType: 'rack', entityId: id, entityName: rack.name, action: 'create', changedBy, context: { source: 'import', mode } });
+          stats.racks++;
+        }
+
+        for (const box of (rack.boxes || [])) {
+          if (box.archived_at) { stats.skipped++; continue; }
+
+          let targetBox = db.prepare(`
+            SELECT * FROM boxes WHERE rack_id = ? AND name = ? AND archived_at IS NULL
+          `).get(targetRack.id, box.name);
+
+          if (!targetBox) {
+            // Use the box's own slot if it's free here, else the first free slot.
+            const slotTaken = s => !!db.prepare(`
+              SELECT 1 FROM boxes WHERE rack_id = ? AND slot_position = ? AND archived_at IS NULL
+            `).get(targetRack.id, s);
+            let slot = box.slot_position;
+            if (!slot || slot > targetRack.capacity || slotTaken(slot)) {
+              slot = null;
+              for (let s = 1; s <= targetRack.capacity; s++) if (!slotTaken(s)) { slot = s; break; }
+            }
+            if (!slot) {
+              stats.warnings.push(`Box "${box.name}" skipped: rack "${targetRack.name}" has no free slot`);
+              stats.skipped++;
+              continue;
+            }
+            if (box.slot_position && slot !== box.slot_position) {
+              stats.warnings.push(`Box "${box.name}" placed in slot ${slot} (slot ${box.slot_position} is taken)`);
+            }
+
+            const id = keepOrNewId('boxes', box.id);
+            insertRow('boxes', { ...plain(box), id, rack_id: targetRack.id, slot_position: slot,
+              created_at: box.created_at || now, updated_at: now });
+            targetBox = db.prepare('SELECT * FROM boxes WHERE id = ?').get(id);
+            logAudit({ entityType: 'box', entityId: id, entityName: box.name, action: 'create', changedBy, context: { source: 'import', mode, rack_id: targetRack.id } });
+            stats.boxes++;
+          }
+
+          for (const vial of (box.vials || [])) {
+            if (vial.archived_at) { stats.skipped++; continue; }
+
+            if (vial.row_index >= targetBox.rows || vial.col_index >= targetBox.cols) {
+              stats.warnings.push(`Vial "${vial.name}" skipped: outside the ${targetBox.rows}×${targetBox.cols} grid of box "${targetBox.name}"`);
+              stats.skipped++;
+              continue;
+            }
+
+            // Skip vials at positions that are already occupied, so merging
+            // never overwrites an existing sample.
+            const occupied = db.prepare(`
+              SELECT 1 FROM vials
+              WHERE box_id = ? AND row_index = ? AND col_index = ? AND archived_at IS NULL
+            `).get(targetBox.id, vial.row_index, vial.col_index);
+            if (occupied) { stats.skipped++; continue; }
+
+            const id = keepOrNewId('vials', vial.id);
+            insertRow('vials', { ...plain(vial), id, box_id: targetBox.id,
+              created_at: vial.created_at || now, updated_at: now });
+            logAudit({ entityType: 'vial', entityId: id, entityName: vial.name, action: 'create', changedBy, context: { source: 'import', mode, box_id: targetBox.id } });
+            stats.vials++;
+          }
+        }
+      }
+    }
+  };
+
+  // ── Run it all in one transaction ─────────────────────────────────────────
+  // Either everything is imported, or (on any error) nothing is: SQLite rolls
+  // back every change made so far and the database is left as it was.
   try {
-    doImport();
-    res.json({ success: true, mode, stats });
+    db.transaction(mode === 'replace' ? doReplace : doMerge)();
+    res.json({ success: true, mode, format, stats });
   } catch (err) {
-    // If anything inside the transaction threw, SQLite has already rolled back.
-    // We just need to report the error to the client.
     console.error('[import] Transaction failed, rolled back:', err.message);
     res.status(500).json({ error: 'Import failed — database rolled back', detail: err.message });
   }

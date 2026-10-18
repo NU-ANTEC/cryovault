@@ -123,8 +123,19 @@ router.post('/archive/restore', (req, res) => {
   const row = db.prepare(`SELECT * FROM ${table} WHERE id = ? AND archived_at IS NOT NULL`).get(entityId);
   if (!row) return res.status(404).json({ error: 'Archived item not found' });
 
-  // For vials, check the position isn't now occupied by another vial
+  // For vials, check the position still exists (the box may have been made
+  // smaller since) and isn't now occupied by another vial
   if (entityType === 'vial') {
+    const box = db.prepare('SELECT name, rows, cols, archived_at FROM boxes WHERE id = ?').get(row.box_id);
+    if (box && box.archived_at) {
+      return res.status(409).json({ error: `Box "${box.name}" is archived — restore the box first` });
+    }
+    if (box && (row.row_index >= box.rows || row.col_index >= box.cols)) {
+      return res.status(409).json({
+        error: `Position ${rowLabel(row.row_index)}${colLabel(row.col_index)} is outside box "${box.name}" (now ${box.rows}×${box.cols})`
+      });
+    }
+
     const conflict = db.prepare(`
       SELECT id FROM vials
       WHERE box_id = ? AND row_index = ? AND col_index = ? AND archived_at IS NULL
@@ -137,7 +148,38 @@ router.post('/archive/restore', (req, res) => {
     }
   }
 
-  db.prepare(`UPDATE ${table} SET archived_at = NULL WHERE id = ?`).run(entityId);
+  // Same for boxes: the slot may have been given to another box since, or
+  // the rack made smaller.
+  if (entityType === 'box') {
+    const rack = db.prepare('SELECT name, capacity FROM racks WHERE id = ?').get(row.rack_id);
+    if (rack && row.slot_position > rack.capacity) {
+      return res.status(409).json({
+        error: `Slot ${row.slot_position} no longer exists in rack "${rack.name}" (capacity ${rack.capacity})`
+      });
+    }
+
+    const conflict = db.prepare(`
+      SELECT name FROM boxes
+      WHERE rack_id = ? AND slot_position = ? AND archived_at IS NULL
+    `).get(row.rack_id, row.slot_position);
+
+    if (conflict) {
+      return res.status(409).json({
+        error: `Slot ${row.slot_position} is now occupied by box "${conflict.name}" — move or archive that box first`
+      });
+    }
+  }
+
+  try {
+    db.prepare(`UPDATE ${table} SET archived_at = NULL WHERE id = ?`).run(entityId);
+  } catch (err) {
+    // The partial unique indexes catch a place taken between the check above
+    // and this update.
+    if (err.message && err.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: 'That position was just taken — please refresh and try again' });
+    }
+    throw err;
+  }
 
   const restored = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(entityId);
   logAudit({ entityType, entityId, entityName: row.name, action: 'restore', changedBy, newData: restored });
