@@ -10,10 +10,10 @@
 #   Stage 2 (final): copies the compiled node_modules from stage 1 into a
 #   fresh image that has no build tools, reducing the attack surface.
 #
-# WHY node:20 (Debian) FOR BOTH STAGES — NOT ALPINE?
+# WHY node:24 (Debian) FOR BOTH STAGES — NOT ALPINE?
 #   better-sqlite3 compiles a native C extension (.node binary) that links
 #   against the C standard library. Alpine Linux uses musl libc; the standard
-#   node:20 image uses glibc (Debian). These two are ABI-incompatible:
+#   node:24 image uses glibc (Debian). These two are ABI-incompatible:
 #   a binary compiled against glibc cannot run on musl and will crash with
 #   "symbol not found: fcntl64" at startup.
 #
@@ -21,13 +21,19 @@
 #   the same ABI as the runtime in stage 2. The image is larger than an
 #   Alpine-based one (~200 MB vs ~50 MB) but works correctly.
 #
+# WHY NODE 24?
+#   Node 24 is the Active LTS line (supported until about April 2028). Node 20
+#   reached end-of-life on 30 April 2026 and no longer gets security fixes.
+#   Node 24 needs better-sqlite3 12 or later: 9.x does not compile against
+#   Node 24's C++20 headers. Keep the two in step when changing either.
+#
 # BUILD:   docker build -t cryovault:latest .
 # RUN:     docker run -p 3000:3000 -v /your/data:/data cryovault:latest
 # =============================================================================
 
 
 # ── Stage 1: Build ────────────────────────────────────────────────────────────
-FROM node:20 AS deps
+FROM node:24 AS deps
 
 WORKDIR /build
 
@@ -48,7 +54,7 @@ RUN apt-get update -qq && \
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
 # Use the same Debian-based image as the build stage so the compiled
 # better-sqlite3 binary runs against the same glibc.
-FROM node:20
+FROM node:24
 
 WORKDIR /app
 
