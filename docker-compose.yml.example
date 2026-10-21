@@ -3,16 +3,15 @@
 # =============================================================================
 #
 # USAGE
-#   1. Generate SSL certs first:   ./deploy/scripts/setup-ssl.sh
+#   1. Put an SSL certificate in ./certs/ (cert.pem + key.pem) — see the README
+#      section "HTTPS with self-signed lab certificates"
 #   2. mkdir -p data backups
 #   3. docker compose up -d
 #
 # PORTS
-#   nginx listens on HTTPS_PORT (default 8443) for HTTPS
-#   and HTTP_PORT (default 8080) which redirects to HTTPS.
-#   Change these in .env if those ports are taken:
-#     HTTP_PORT=8880
-#     HTTPS_PORT=8443
+#   nginx serves HTTPS on HTTPS_PORT (default 44300). Plain http:// on that
+#   same port is redirected to https://. Change it in .env, e.g.:
+#     HTTPS_PORT=44300
 #
 # The app container is NOT exposed to the host — all traffic goes through nginx.
 # =============================================================================
@@ -77,9 +76,8 @@ services:
     restart: unless-stopped
 
     ports:
-      # Change HTTP_PORT / HTTPS_PORT in .env to avoid conflicts with other
-      # services. Default: 8080 (HTTP redirect) and 44300 (HTTPS).
-      - "${HTTP_PORT:-8080}:80"
+      # One port for everything: HTTPS, with http:// on the same port
+      # redirected to https://. Set HTTPS_PORT in .env (default 44300).
       - "${HTTPS_PORT:-44300}:443"
 
     volumes:

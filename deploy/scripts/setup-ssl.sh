@@ -6,6 +6,17 @@
 # This script sets up HTTPS for CryoVault. Run it on your Ubuntu server
 # from inside the cryovault project directory.
 #
+# ⚠ OUT OF DATE — for self-signed certificates, follow the README section
+#   "HTTPS with self-signed lab certificates" instead. This script:
+#     • makes a certificate with no valid name list when given a hostname
+#       (it writes the name as an IP address too; OpenSSL rejects that and
+#       the script falls back to a certificate browsers refuse),
+#     • overwrites the tracked deploy/nginx/nginx.conf, which then blocks
+#       `git pull`,
+#     • edits docker-compose.yml for a port layout it no longer uses.
+#   Option B (Let's Encrypt) still obtains a certificate, but do the
+#   docker-compose / nginx part by hand as in the README.
+#
 # OPTION A — Self-signed certificate (LAN / no public domain)
 #   For internal lab use where a domain name isn't available.
 #   Browsers will show a "Your connection is not private" warning

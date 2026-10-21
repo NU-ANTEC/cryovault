@@ -124,6 +124,150 @@ A ready-to-use nginx config is included at `deploy/nginx/nginx.conf`.
 
 ---
 
+### HTTPS with self-signed lab certificates
+
+For an internal deployment: HTTPS on the port you already use, with your own
+certificates. Browsers need HTTPS for camera access, so QR scanning on
+phones and tablets depends on it.
+
+You create one small **lab certificate authority (CA)** once, and use it to
+sign a certificate for each server. Each computer or phone then trusts the
+CA once, which covers every server it signed and every future renewal. You
+never click through browser warnings.
+
+#### 1. Create the lab CA (once, on any computer with `openssl`)
+
+```bash
+mkdir -p ~/cryovault-ca && cd ~/cryovault-ca
+openssl req -x509 -new -nodes -newkey rsa:4096 -sha256 -days 3650 \
+  -keyout ca.key -out ca.crt \
+  -subj "/O=NU-ANTEC/CN=NU-ANTEC CryoVault Lab CA" \
+  -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
+  -addext "keyUsage=critical,keyCertSign,cRLSign"
+chmod 600 ca.key
+```
+
+`ca.crt` is the file you install on computers and phones. Keep `ca.key`
+private and off the servers: anyone holding it can make certificates that
+your computers will trust. Keep a copy somewhere safe, because you'll need it
+to renew server certificates. It must never go in the repository.
+
+#### 2. Make a certificate for each server (in the same folder)
+
+List every name and address people use to reach that server. Run
+`hostname -f` and `hostname -I` on the server to see them. A name that isn't
+listed gets a certificate error.
+
+```bash
+NAME=cryo1                                   # a short label for this server
+cat > $NAME.ext <<EOF
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = DNS:cryo1, DNS:cryo1.example.northwestern.edu, IP:10.0.0.21
+EOF
+openssl req -new -nodes -newkey rsa:2048 -keyout $NAME.key -out $NAME.csr -subj "/CN=$NAME"
+openssl x509 -req -in $NAME.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
+  -out $NAME.crt -days 825 -sha256 -extfile $NAME.ext
+openssl verify -CAfile ca.crt $NAME.crt      # should print: cryo1.crt: OK
+```
+
+Replace the `subjectAltName` line with that server's real names and IPs.
+Use `DNS:` for names and `IP:` for addresses, separated by commas. 825 days
+is the longest validity Apple devices accept. Repeat for the second server
+with its own `NAME` and names.
+
+Copy the two files into the server's cryovault folder:
+
+```bash
+# on the server, in the cryovault folder
+mkdir -p certs
+cp /path/to/cryo1.crt certs/cert.pem
+cp /path/to/cryo1.key certs/key.pem
+chmod 600 certs/key.pem
+```
+
+(`certs/` is in `.gitignore`.)
+
+#### 3. Switch the server to HTTPS on the same port
+
+```bash
+git pull
+cp docker-compose.yml docker-compose.yml.http-backup
+```
+
+Edit `docker-compose.yml` so that:
+
+- **The `app` service has no `ports:` section.** Delete it if present, for
+  example `- "${DOCKER_HOST_PORT:-3000}:${PORT:-3000}"`. Keep `expose: ["3000"]`
+  and `networks: [internal]`, so the app is only reachable through nginx.
+- **There is an `nginx` service like this:**
+
+  ```yaml
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: cryovault-nginx
+    restart: unless-stopped
+    ports:
+      - "${HTTPS_PORT:-44300}:443"
+    volumes:
+      - ./deploy/nginx/nginx-ssl.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - app
+    networks:
+      - internal
+  ```
+
+If you never customised the compose file, you can instead copy
+`docker-compose.yml.example` over it. Check with
+`diff docker-compose.yml docker-compose.yml.example` first.
+
+In `.env`, set `HTTPS_PORT` to the port you use today (for example
+`HTTPS_PORT=44300`). Then apply it:
+
+```bash
+docker compose up -d
+docker compose ps                  # app and nginx both "Up"
+```
+
+Check it from another machine:
+
+```bash
+curl --cacert ca.crt https://cryo1:44300/api/health    # {"status":"ok",...}
+curl -sI http://cryo1:44300/ | head -3                  # 301 → https://cryo1:44300/
+```
+
+Old `http://…:44300` bookmarks keep working: nginx redirects plain HTTP on
+that port to HTTPS on the same port.
+
+#### 4. Trust the lab CA on each computer and phone (once)
+
+Copy `ca.crt` (never `ca.key`) to the device, then:
+
+| Device | How |
+|---|---|
+| Windows (Chrome, Edge) | As administrator: `certutil -addstore -f Root ca.crt`, or double-click `ca.crt` → Install Certificate → Local Machine → Trusted Root Certification Authorities |
+| macOS (Safari, Chrome) | `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ca.crt` |
+| Linux (system tools) | `sudo cp ca.crt /usr/local/share/ca-certificates/cryovault-lab-ca.crt && sudo update-ca-certificates` |
+| Linux (Chrome/Chromium) | `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "CryoVault Lab CA" -i ca.crt` (from package `libnss3-tools`) |
+| Firefox (any OS) | Settings → Privacy & Security → Certificates → View Certificates → Authorities → Import → tick "Trust this CA to identify websites" |
+| iPhone / iPad | Send `ca.crt` by AirDrop or email and open it → Settings → Profile Downloaded → Install. Then Settings → General → About → Certificate Trust Settings → turn the CA on |
+| Android | Settings → Security → Encryption & credentials → Install a certificate → CA certificate (menu names vary by phone) |
+
+Restart the browser afterwards.
+
+#### Renewing and undoing
+
+- **A server certificate expires (after 825 days):** repeat step 2 for that
+  server, copy the new files into `certs/`, then run
+  `docker compose restart nginx`. Devices need nothing new. The CA lasts 10 years.
+- **Check a certificate's expiry date:** `openssl x509 -in certs/cert.pem -noout -enddate`
+- **Back to plain HTTP:** run `cp docker-compose.yml.http-backup docker-compose.yml`,
+  then `docker compose up -d --remove-orphans`.
+
+---
+
 ### Updating
 
 ```bash
