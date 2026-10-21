@@ -10,7 +10,7 @@
 # WHAT IT INSTALLS
 #   - Docker Engine (container runtime)
 #   - Docker Compose plugin (orchestration)
-#   - Node.js 20 LTS (for pm2-based deployments, optional)
+#   - Node.js 24 LTS (for pm2-based deployments, optional)
 #   - pm2 (process manager, optional)
 #   - Required system directories and permissions
 #
@@ -92,7 +92,7 @@ APP_USER="${APP_USER:-cryovault}"      # Unix user that will own and run the app
 APP_DIR="${APP_DIR:-/opt/cryovault}"   # Where the application lives
 DATA_DIR="${DATA_DIR:-/opt/cryovault-data}"   # Persistent data (database, backups)
 LOG_DIR="${LOG_DIR:-/var/log/cryovault}"
-NODE_VERSION="${NODE_VERSION:-20}"
+NODE_VERSION="${NODE_VERSION:-24}"
 
 info "App directory : $APP_DIR"
 info "Data directory: $DATA_DIR"
